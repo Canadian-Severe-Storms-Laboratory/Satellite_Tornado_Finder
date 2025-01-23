@@ -54,7 +54,7 @@ namespace ArcGISUtils
             string path;
 
             #if DEBUG
-                path = @"C:\Users\danie\Documents\Experiments\Satellite\Satellite_Analyzer\bin\x64\Debug\net8.0-windows";
+                path = @"C:\Users\danie\Documents\Experiments\Satellite\Satellite_Tornado_Finder\Satellite_Analyzer\bin\x64\Debug\net8.0-windows";
             #else
                 path = AddinAssemblyLocation();
             #endif

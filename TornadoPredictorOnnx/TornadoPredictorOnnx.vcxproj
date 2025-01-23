@@ -169,8 +169,8 @@
   <ItemGroup>
     <CustomBuild Include="swig.i">
       <FileType>Document</FileType>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">swig -csharp -c++ -outdir "C:\Users\danie\Documents\Experiments\Satellite\Satellite_Analyzer\SWIG_Generated" swig.i</Command>
-      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">swig -csharp -c++ -outdir "C:\Users\danie\Documents\Experiments\Satellite\Satellite_Analyzer\SWIG_Generated" swig.i</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">swig -csharp -c++ -outdir "$(SolutionDir)SWIG_Generated" swig.i</Command>
+      <Command Condition="'$(Configuration)|$(Platform)'=='Release|x64'">swig -csharp -c++ -outdir "$(SolutionDir)SWIG_Generated" swig.i</Command>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Release|x64'">swig_wrap.cxx</Outputs>
       <Outputs Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">swig_wrap.cxx</Outputs>
     </CustomBuild>
