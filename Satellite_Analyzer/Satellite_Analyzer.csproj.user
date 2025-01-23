@@ -5,12 +5,18 @@
     <Compile Update="MonthYearSelection.xaml.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Update="TileSearchInput.xaml.cs">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Main.xaml">
       <SubType>Designer</SubType>
     </Page>
     <Page Update="MonthYearSelection.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Update="TileSearchInput.xaml">
       <SubType>Designer</SubType>
     </Page>
   </ItemGroup>

@@ -80,50 +80,35 @@ namespace Satellite_Analyzer
             var (bMonth, bYear) = beforeDate.GetDate();
             var (aMonth, aYear) = afterDate.GetDate();
 
-            var watch = System.Diagnostics.Stopwatch.StartNew();
-
-            if (sender == null) 
+            if (tileSearchInput.IsTileIndexSearch()) 
             {
-                SearchResult result = (SearchResult)foundList.SelectedItem;
+                var (tileX, tileY) = tileSearchInput.GetTileIndex();
 
-                (beforeImg, beforeCCImg, envelope) = await planetReader.FindImage(result.tileX, result.tileY, bMonth, bYear);
-                (afterImg, afterCCImg, _) = await planetReader.FindImage(result.tileX, result.tileY, aMonth, aYear);
+                (beforeImg, beforeCCImg, envelope) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
+                (afterImg, afterCCImg, _) = await planetReader.FindImage(tileX, tileY, aMonth, aYear);
             }
             else
             {
-                double lat = latBox.GetNumber();
-                double lon = lonBox.GetNumber();
+                var (lat, lon) = tileSearchInput.GetCoordinates();
 
                 (beforeImg, beforeCCImg, envelope, worstPoint) = await planetReader.FindImage(lat, lon, bMonth, bYear);
                 (afterImg, afterCCImg, _, _) = await planetReader.FindImage(lat, lon, aMonth, aYear);
             }
 
-            if (beforeImg == null || afterImg == null) return;
-
-            watch.Stop();
-            var elapsedMs = watch.ElapsedMilliseconds;
-
-            System.Diagnostics.Debug.WriteLine("**********  Planet Time:  " + elapsedMs + " ms  **********");
+            if (beforeImg == null || afterImg == null)
+            {
+                loadingLabel.Visibility = Visibility.Hidden;
+                MessageBox.Show("Failed to load image from Planet");
+                return;
+            }
 
             Cv2.MedianBlur(beforeImg, beforeImg, 7);
             Cv2.MedianBlur(afterImg, afterImg, 7);
 
-            watch = System.Diagnostics.Stopwatch.StartNew();
-
             ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
-
-            watch.Stop();
-            elapsedMs = watch.ElapsedMilliseconds;
-
-            System.Diagnostics.Debug.WriteLine("**********  ML Time:  " +  elapsedMs + " ms  **********");
-
             predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
 
-            landcoverImg = LandCover.TypeMask(await LandCover.GetSection(envelope), LandCover.potentialForestTypes);
-            Cv2.Resize(landcoverImg, landcoverImg, afterImg.Size(), interpolation: InterpolationFlags.Cubic);
-            Cv2.Threshold(landcoverImg, landcoverImg, 127, 255, ThresholdTypes.Binary);
-            Cv2.Erode(landcoverImg, landcoverImg, Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(7, 7)), iterations: 2);
-            Cv2.CvtColor(landcoverImg, landcoverImg, ColorConversionCodes.GRAY2BGR);
+            landcoverImg = await SystematicSearch.LandCoverMask(envelope, beforeImg.Size());
 
             Mat mask = new();
             beforeUDMImg = new Mat();
@@ -142,22 +127,17 @@ namespace Satellite_Analyzer
 
             Cv2.Absdiff(afterUDMImg, beforeUDMImg, diffImg);
 
-            ForeachPixel(diffImg, (i, j) =>
-            {
-                Vec3b d = diffImg.At<Vec3b>(i, j);
-                d[0] = (byte)Math.Clamp((d[0] - 10) * 30, 0, 255);
-                d[1] = (byte)Math.Clamp((d[1] - 10) * 30, 0, 255);
-                d[2] = (byte)Math.Clamp((d[2] - 10) * 30, 0, 255);
+            diffImg = diffImg.Subtract(new Scalar(10, 10, 10)) * 30;
 
-                diffImg.Set(i, j, d);
-            });
+            //ForeachPixel(diffImg, (i, j) =>
+            //{
+            //    Vec3b d = diffImg.At<Vec3b>(i, j);
+            //    d[0] = (byte)Math.Clamp((d[0] - 10) * 30, 0, 255);
+            //    d[1] = (byte)Math.Clamp((d[1] - 10) * 30, 0, 255);
+            //    d[2] = (byte)Math.Clamp((d[2] - 10) * 30, 0, 255);
 
-            //predImg = diffImg.InRange(new Scalar(200, 200, 200), new Scalar(255, 255, 255));
-            //Cv2.Erode(predImg, predImg, Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(5, 5)));
-            //Cv2.Dilate(predImg, predImg, Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(5, 5)), iterations: 2);
-            //Cv2.CvtColor(predImg, predImg, ColorConversionCodes.GRAY2BGR);
-
-            //Cv2.BitwiseAnd(diffImg, predImg, predImg);
+            //    diffImg.Set(i, j, d);
+            //});
 
             imgPlottables = [MatToImageRect(beforeImg), MatToImageRect(afterImg), MatToImageRect(landcoverImg),
                              MatToImageRect(beforeCCImg), MatToImageRect(afterCCImg), MatToImageRect(beforeUDMImg), MatToImageRect(afterUDMImg),
@@ -240,24 +220,20 @@ namespace Satellite_Analyzer
             loaded = true;
         }
 
-        private List<RasterLayer> GetDataSetLayers()
+        private IEnumerable<RasterLayer> GetRasterLayers()
         {
             //get current map
             var map = MapView.Active.Map;
 
             //get all raster layers on map
-            var layers = map.GetLayersAsFlattenedList().OfType<RasterLayer>();
-
-            //filter to landcover layers
-            return layers.Where(l => l.Name.Contains("proj_Clip")).ToList();
+            return map.GetLayersAsFlattenedList().OfType<RasterLayer>();
         }
 
         private void UpdateSearchParams(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             SevereStorm storm = eventList.SelectedItem as SevereStorm;
 
-            latBox.SetNumber(storm.worstLat);
-            lonBox.SetNumber(-storm.worstLon);
+            tileSearchInput.SetCoordinates(storm.worstLat, -storm.worstLon);
 
             int beforeYear = storm.month >= 8 ? storm.year : storm.year - 1;
 
@@ -390,6 +366,9 @@ namespace Satellite_Analyzer
 
         private void foundList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
+            SearchResult result = (SearchResult)foundList.SelectedItem;
+            tileSearchInput.SetTileIndex(result.tileX, result.tileY);
+
             Search();
         }
 

@@ -6,6 +6,6 @@
              mc:Ignorable="d" 
              d:DesignHeight="20" d:DesignWidth="50">
     <Grid>
-        <TextBox TextWrapping="Wrap" BorderBrush="Black" Text="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Path=NumberString, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" PreviewTextInput="NumberValidationTextBox" TextChanged="TextBox_TextChanged" FontWeight="Light" FontSize="12"/>
+        <TextBox TextWrapping="Wrap" BorderBrush="Black" Text="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type UserControl}}, Path=NumberString, UpdateSourceTrigger=PropertyChanged}" TextAlignment="Center" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" PreviewTextInput="NumberValidationTextBox" TextChanged="TextBox_TextChanged" FontWeight="Bold" FontSize="12"/>
     </Grid>
 </UserControl>

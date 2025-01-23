@@ -1,0 +1,33 @@
+﻿<UserControl x:Class="Satellite_Analyzer.TileSearchInput"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Satellite_Analyzer"
+             mc:Ignorable="d" 
+             d:DesignHeight="150" d:DesignWidth="200">
+    <Grid Background="White">
+        <ComboBox x:Name="SearchType" SelectionChanged="SearchType_SelectionChanged" HorizontalContentAlignment="Center" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="0,10,0,0" Height="25" FontSize="14" FontWeight="Bold" SelectedIndex="0">
+            <ComboBoxItem Content="Coordinate Search"/>
+            <ComboBoxItem Content="Tile Index Search"/>
+        </ComboBox>
+
+        <Grid x:Name="CoordinateSearch" Visibility="Visible">
+            
+            <Label Grid.Column="0" Content="Lat :" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,50,0,0" FontSize="14" FontWeight="Bold"/>
+            <Label Grid.Column="0" Content="Lon :" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,80,0,0" FontSize="14" FontWeight="Bold"/>
+            <local:NumberBox x:Name="latBox" NumberString="0.0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="50,55,30,0" Height="20"/>
+            <local:NumberBox x:Name="lonBox" NumberString="0.0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="50,85,30,0" Height="20"/>
+            <Label Grid.Column="0" Content="N°" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,50,3,0" FontSize="14" FontWeight="Bold"/>
+            <Label Grid.Column="0" Content="W°" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,80,1,0" FontSize="14" FontWeight="Bold"/>
+        </Grid>
+        
+        <Grid x:Name="TileIndexSearch" Visibility="Hidden">
+            <Label Grid.Column="0" Content="X :" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,50,0,0" FontSize="14" FontWeight="Bold"/>
+            <Label Grid.Column="0" Content="Y :" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,80,0,0" FontSize="14" FontWeight="Bold"/>
+            <local:NumberBox x:Name="xBox" NumberString="0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="50,55,30,0" Height="20"/>
+            <local:NumberBox x:Name="yBox" NumberString="0" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="50,85,30,0" Height="20"/>
+        </Grid>
+
+    </Grid>
+</UserControl>

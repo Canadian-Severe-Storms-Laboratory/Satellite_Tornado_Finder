@@ -14,6 +14,7 @@ using System.Threading.Tasks.Dataflow;
 using System.Runtime.InteropServices;
 using System.Collections.Concurrent;
 using System.Linq;
+using Newtonsoft.Json;
 
 namespace Satellite_Analyzer
 {
@@ -199,10 +200,27 @@ namespace Satellite_Analyzer
 
             monitor.Stop();
 
+            SaveSearchResults();
+
             return [.. significantTiles];
         }
 
-        static async Task<Mat> LandCoverMask(Envelope envelope, Size size)
+        private static void SaveSearchResults()
+        {
+            string path = savePath + "\\results.json";
+
+            Dictionary<string, object> results = new()
+            {
+                { "folderPath", savePath },
+                { "tiles", significantTiles }
+            };
+
+            using StreamWriter sw = new(path);
+            sw.WriteLine(JsonConvert.SerializeObject(results));
+
+        }
+
+        public static async Task<Mat> LandCoverMask(Envelope envelope, Size size)
         {
             Mat landcoverImg = LandCover.TypeMask(await LandCover.GetSection(envelope), LandCover.potentialForestTypes);
 
@@ -215,7 +233,7 @@ namespace Satellite_Analyzer
         }
 
 
-        static List<(int, int)> PolygonToTiles(Polygon polygon)
+        private static List<(int, int)> PolygonToTiles(Polygon polygon)
         {
             List<(int, int)> tiles = [];
 
@@ -239,81 +257,7 @@ namespace Satellite_Analyzer
             return tiles;
         }
 
-        /*
-           foreach (var (x, y) in tiles)
-            {
-                monitor.Update();
-                if (monitor.cancelled) break;
-
-                string imgName = $"tile_{x}_{y}.png";
-                string imgPath = savePath + "\\" + imgName;
-
-                var (beforeImg, beforeCCImg, envelope) = await planetReader.FindImage(x, y, bMonth, bYear, imgPath);
-
-                if (beforeImg == null) continue;    
-                if (monitor.cancelled) break;
-
-                var (afterImg, afterCCImg, _) = await planetReader.FindImage(x, y, aMonth, aYear);
-
-                if (afterImg == null) continue;
-                if (monitor.cancelled) break;
-
-                Cv2.MedianBlur(beforeImg, beforeImg, 7);
-                Cv2.MedianBlur(afterImg, afterImg, 7);
-
-                if (monitor.cancelled) break;
-
-                ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
-                Mat predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
-
-                if (monitor.cancelled) break;
-
-                Mat landcoverImg = await LandCoverMask(envelope, beforeImg.Size());
-
-                Mat mask = new();
-                Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
-                Cv2.BitwiseAnd(mask, beforeCCImg, mask);
-
-                //fix
-                Cv2.CvtColor(mask, mask, ColorConversionCodes.BGR2GRAY);
-
-                Cv2.BitwiseAnd(predImg, mask, predImg);
-                Cv2.MorphologyEx(predImg, predImg, MorphTypes.Open, Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(21, 21)));
-                //Cv2.Erode(predImg, predImg, Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(17, 17)));
-
-                if (monitor.cancelled) break;
-
-                int pxCount = Cv2.CountNonZero(predImg);
-
-                //if (pxCount < 2000) continue;
-
-                significantTiles.Add(new (x, y, pxCount));
-
-                //Cv2.CvtColor(predImg, predImg, ColorConversionCodes.GRAY2BGR);
-                Cv2.Merge([predImg, predImg, predImg, predImg], predImg);
-
-                await QueuedTask.Run(() => {
-                    var rd = DuplicateRasterDataset(savePath, imgName, savePath, $"pred_{x}_{y}.tif");
-                    Raster raster = rd.CreateFullRaster();
-                    WriteRaster<byte>(predImg, raster);
-
-                    var layer = LoadRasterLayer(savePath, $"pred_{x}_{y}.tif", group);
-
-                    CIMRasterRGBColorizer colorizer = new()
-                    {
-                        AlphaBandIndex = 3,
-                        StretchType = RasterStretchType.MinimumMaximum,
-                        UseAlphaBand = true,
-                        UseGreenBand = false,
-                        UseBlueBand = false
-                    };
-
-                    layer.SetColorizer(colorizer);
-
-                });
-
-            }
-         */
+        
 
     }
 }

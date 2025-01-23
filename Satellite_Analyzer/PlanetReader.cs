@@ -58,10 +58,9 @@ namespace Satellite_Analyzer
             Mat img = new();
             Mat ccMask = new();
 
-            string url = String.Format(BASEMAP_URL, baseMapDict[(month, year)], x, y);
-
             try
             {
+                string url = String.Format(BASEMAP_URL, baseMapDict[(month, year)], x, y);
                 img = await FetchImageTile(url, savePath);
                 ccMask = await FetchUDM(url);
             }

@@ -12,7 +12,7 @@
             <ColumnDefinition Width="1*" />
         </Grid.ColumnDefinitions>
 
-        <ComboBox SelectedIndex="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="0" x:Name="monthBox" Text="Month" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="12" FontWeight="Light">
+        <ComboBox SelectedIndex="7" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="0" x:Name="monthBox" Text="Month" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="12" FontWeight="Bold">
             <ComboBoxItem Content="January"></ComboBoxItem>
             <ComboBoxItem Content="February"></ComboBoxItem>
             <ComboBoxItem Content="March"></ComboBoxItem>
@@ -26,7 +26,7 @@
             <ComboBoxItem Content="November"></ComboBoxItem>
             <ComboBoxItem Content="December"></ComboBoxItem>
         </ComboBox>
-        <ComboBox SelectedIndex="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="1" x:Name="yearBox" Text="Year" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="12" FontWeight="Light"></ComboBox>
+        <ComboBox SelectedIndex="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="1" x:Name="yearBox" Text="Year" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="12" FontWeight="Bold"></ComboBox>
     </Grid>
 
 </UserControl>
