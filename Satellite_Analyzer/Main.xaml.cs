@@ -35,7 +35,6 @@ namespace Satellite_Analyzer
         private Mat afterCCImg = null;
         private Mat beforeUDMImg = null;
         private Mat afterUDMImg = null;
-        private Mat colourMatchedImg = null;
         private Mat diffImg = null;
         private Mat predImg = null;
 
@@ -84,8 +83,8 @@ namespace Satellite_Analyzer
             {
                 var (tileX, tileY) = tileSearchInput.GetTileIndex();
 
-                (beforeImg, beforeCCImg, envelope) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
-                (afterImg, afterCCImg, _) = await planetReader.FindImage(tileX, tileY, aMonth, aYear);
+                (beforeImg, beforeCCImg, envelope, _) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
+                (afterImg, afterCCImg, _, _) = await planetReader.FindImage(tileX, tileY, aMonth, aYear);
             }
             else
             {
@@ -120,28 +119,11 @@ namespace Satellite_Analyzer
             Cv2.BitwiseAnd(beforeImg, mask, beforeUDMImg);
             Cv2.BitwiseAnd(afterImg, mask, afterUDMImg);
 
-            colourMatchedImg = HistogramMatcher.HistMatch(afterUDMImg, beforeUDMImg);
-            Cv2.BitwiseAnd(colourMatchedImg, mask, colourMatchedImg);
-
-            diffImg = new Mat(afterImg.Size(), MatType.CV_8UC3);
-
-            Cv2.Absdiff(afterUDMImg, beforeUDMImg, diffImg);
-
-            diffImg = diffImg.Subtract(new Scalar(10, 10, 10)) * 30;
-
-            //ForeachPixel(diffImg, (i, j) =>
-            //{
-            //    Vec3b d = diffImg.At<Vec3b>(i, j);
-            //    d[0] = (byte)Math.Clamp((d[0] - 10) * 30, 0, 255);
-            //    d[1] = (byte)Math.Clamp((d[1] - 10) * 30, 0, 255);
-            //    d[2] = (byte)Math.Clamp((d[2] - 10) * 30, 0, 255);
-
-            //    diffImg.Set(i, j, d);
-            //});
+            diffImg = SystematicSearch.AbsDifferenceImage(beforeUDMImg, afterUDMImg);
 
             imgPlottables = [MatToImageRect(beforeImg), MatToImageRect(afterImg), MatToImageRect(landcoverImg),
-                             MatToImageRect(beforeCCImg), MatToImageRect(afterCCImg), MatToImageRect(beforeUDMImg), MatToImageRect(afterUDMImg),
-                             MatToImageRect(colourMatchedImg), MatToImageRect(diffImg), MatToImageRect(predImg)];
+                             MatToImageRect(beforeCCImg), MatToImageRect(afterCCImg), MatToImageRect(beforeUDMImg), 
+                             MatToImageRect(afterUDMImg), MatToImageRect(diffImg), MatToImageRect(predImg)];
 
             rects.Clear();
             otherRects.Clear();

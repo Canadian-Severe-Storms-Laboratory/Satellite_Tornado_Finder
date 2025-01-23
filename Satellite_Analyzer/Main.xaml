@@ -33,6 +33,7 @@
                         <ColumnDefinition Width="1*" />
                     </Grid.ColumnDefinitions>
 
+                    <local:TileSearchInput x:Name="tileSearchInput" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20, 0, 20, 0" />
                                     
                     <Button Click="Search" Grid.Column="0" Content="Search" HorizontalAlignment="Left" VerticalAlignment="Top" Width="80" Margin="10,270,0,0" FontSize="14" FontWeight="Bold"/>
 
@@ -75,7 +76,7 @@
                 <ColumnDefinition Width="1*" />
             </Grid.ColumnDefinitions>
 
-            <local:TileSearchInput x:Name="tileSearchInput" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20, 0, 20, 0" />
+            
 
             <Label Grid.Column="0" Content="Before Date" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,120,0,0" FontSize="14" FontWeight="Bold"/>
             <local:MonthYearSelection x:Name="beforeDate" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,150,20,0" Height="25"/>
@@ -93,7 +94,6 @@
                 <ListBoxItem Content="After Cloudcover" Height="50"/>
                 <ListBoxItem Content="Before UDM" Height="50"/>
                 <ListBoxItem Content="After UDM" Height="50"/>
-                <ListBoxItem Content="After Corrected" Height="50"/>
                 <ListBoxItem Content="Difference" Height="50"/>
                 <ListBoxItem Content="Prediction" Height="50"/>
             </ListBox>

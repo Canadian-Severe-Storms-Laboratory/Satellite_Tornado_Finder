@@ -49,7 +49,8 @@ namespace Satellite_Analyzer
         private static List<(int, int)> tiles;
         private static ConcurrentBag<SearchResult> significantTiles;
         private static string savePath;
-        private static GroupLayer group;
+        private static GroupLayer predGroup;
+        private static GroupLayer diffGroup;
         private static Monitor monitor;
         private static int bMonth, bYear, aMonth, aYear;
 
@@ -73,7 +74,8 @@ namespace Satellite_Analyzer
 
             savePath = CreateResultsFolder();
 
-            group = await QueuedTask.Run(() => { return LayerFactory.Instance.CreateGroupLayer(MapView.Active.Map, 0, "Tornado_Prediction"); });
+            predGroup = await QueuedTask.Run(() => { return LayerFactory.Instance.CreateGroupLayer(MapView.Active.Map, 0, "Tornado_Prediction"); });
+            diffGroup = await QueuedTask.Run(() => { return LayerFactory.Instance.CreateGroupLayer(MapView.Active.Map, 0, "Differnce_Images"); });
 
             monitor = new("Search Progress", tiles.Count);
         }
@@ -84,36 +86,37 @@ namespace Satellite_Analyzer
 
             monitor.Start();
 
-            var downloadBlock = new TransformBlock<(int, int), (int, int, Mat, Mat, Envelope, Mat, Mat)>(async (tile) =>
+            var downloadBlock = new TransformBlock<(int, int), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[])>(async (tile) =>
             {
-                if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, null, null, null);
+                if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, null, null, null, null, null);
 
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 var (x, y) = tile;
 
-                string imgName = $"tile_{x}_{y}.png";
-                string imgPath = savePath + "\\" + imgName;
+                string imgName = $"_{x}_{y}.png";
+                string beforePath = savePath + "\\before" + imgName;
+                string afterPath = savePath + "\\after" + imgName;
 
-                var (beforeImg, beforeCCImg, envelope) = await planetReader.FindImage(x, y, bMonth, bYear, imgPath);
-                if (beforeImg == null) return (x, y, null, null, null, null, null);
+                var (beforeImg, beforeCCImg, envelope, beforeBytes) = await planetReader.FindImage(x, y, bMonth, bYear, beforePath);
+                if (beforeImg == null) return (x, y, null, null, null, null, null, null, null);
 
-                var (afterImg, afterCCImg, _) = await planetReader.FindImage(x, y, aMonth, aYear);
-                if (afterImg == null) return (x, y, null, null, null, null, null);
+                var (afterImg, afterCCImg, _, afterBytes) = await planetReader.FindImage(x, y, aMonth, aYear, afterPath);
+                if (afterImg == null) return (x, y, null, null, null, null, null, null, null);
 
                 watch.Stop();
                 Console.WriteLine($"Tile {x}, {y} downloaded in {watch.ElapsedMilliseconds} ms");
 
-                return (x, y, beforeImg, beforeCCImg, envelope, afterImg, afterCCImg);
+                return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes);
             });
 
-            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, Envelope, Mat, Mat), (int, int, int, Mat)>(async (packet) =>
+            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[]), (int, int, int, Mat, Mat, byte[], byte[])>(async (packet) =>
             {
-                if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, null);
+                if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, null, null, null, null);
 
                 var watch = System.Diagnostics.Stopwatch.StartNew();
-                var (x, y, beforeImg, beforeCCImg, envelope, afterImg, afterCCImg) = packet;
+                var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes) = packet;
 
-                if (beforeImg == null || afterImg == null) return (x, y, 0, null);
+                if (beforeImg == null || afterImg == null) return (x, y, 0, null, null, null, null);
 
                 Cv2.MedianBlur(beforeImg, beforeImg, 7);
                 Cv2.MedianBlur(afterImg, afterImg, 7);
@@ -127,6 +130,9 @@ namespace Satellite_Analyzer
                 Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
                 Cv2.BitwiseAnd(mask, beforeCCImg, mask);
 
+                Mat diffImg = AbsDifferenceImage(beforeImg, afterImg);
+                Cv2.BitwiseAnd(mask, diffImg, diffImg);
+
                 Cv2.CvtColor(mask, mask, ColorConversionCodes.BGR2GRAY);
 
                 Cv2.BitwiseAnd(predImg, mask, predImg);
@@ -137,17 +143,19 @@ namespace Satellite_Analyzer
                 watch.Stop();
                 Console.WriteLine($"Tile {x}, {y} predicted in {watch.ElapsedMilliseconds} ms");
 
-                return (x, y, pxCount, predImg);
+                return (x, y, pxCount, predImg, diffImg, beforeBytes, afterBytes);
             });
 
-            var saveBlock = new ActionBlock<(int, int, int, Mat)>(async (packet) =>
+            var saveBlock = new ActionBlock<(int, int, int, Mat, Mat, byte[], byte[])>(async (packet) =>
             {
                 if (monitor.cancelled) return;
 
-                var (x, y, pxCount, predImg) = packet;
+                var (x, y, pxCount, predImg, diffImg, beforeBytes, afterBytes) = packet;
+
+                string imgName = $"_{x}_{y}.png";
 
                 if (pxCount < 2000)
-                {
+                { 
                     Console.WriteLine($"Tile {x}, {y} skipped");
                     monitor.Update();
                     return;
@@ -155,18 +163,26 @@ namespace Satellite_Analyzer
 
                 var watch = System.Diagnostics.Stopwatch.StartNew();
 
+                await File.WriteAllBytesAsync(savePath + "\\before" + imgName, beforeBytes);
+                await File.WriteAllBytesAsync(savePath + "\\after" + imgName, afterBytes);
+
                 significantTiles.Add(new(x, y, pxCount));
 
-                string imgName = $"tile_{x}_{y}.png";
+                Mat diffMask = new();
+                Cv2.InRange(diffImg, new Scalar(1, 1, 1), new Scalar(255, 255, 255), diffMask);
+
+                Mat[] diffchannels = Cv2.Split(diffImg);
+
+                Cv2.Merge([diffchannels[2], diffchannels[1], diffchannels[0], diffMask], diffImg);
 
                 await QueuedTask.Run(() =>
                 {
-                    var rd = DuplicateRasterDataset(savePath, imgName, savePath, $"pred_{x}_{y}.tif");
+                    var rd = DuplicateRasterDataset(savePath, "before" + imgName, savePath, $"pred_{x}_{y}.tif");
                     Raster raster = rd.CreateFullRaster();
 
                     WriteByteRaster(predImg, raster, channels: 4);
 
-                    var layer = LoadRasterLayer(savePath, $"pred_{x}_{y}.tif", group);
+                    var layer = LoadRasterLayer(savePath, $"pred_{x}_{y}.tif", predGroup);
 
                     CIMRasterRGBColorizer colorizer = new()
                     {
@@ -175,6 +191,22 @@ namespace Satellite_Analyzer
                         UseAlphaBand = true,
                         UseGreenBand = false,
                         UseBlueBand = false
+                    };
+
+                    layer.SetColorizer(colorizer);
+
+                    rd = DuplicateRasterDataset(savePath, "before" + imgName, savePath, $"diff_{x}_{y}.tif");
+                    raster = rd.CreateFullRaster();
+
+                    WriteRaster<byte>(diffImg, raster);
+
+                    layer = LoadRasterLayer(savePath, $"diff_{x}_{y}.tif", diffGroup);
+
+                    colorizer = new()
+                    {
+                        AlphaBandIndex = 3,
+                        StretchType = RasterStretchType.MinimumMaximum,
+                        UseAlphaBand = true,
                     };
 
                     layer.SetColorizer(colorizer);
@@ -232,6 +264,18 @@ namespace Satellite_Analyzer
             return landcoverImg;
         }
 
+        public static Mat AbsDifferenceImage(Mat before, Mat after)
+        {
+            Mat diffImg = new();
+
+            Cv2.Absdiff(after, before, diffImg);
+
+            //adjust brightness and contrast
+            diffImg.ConvertTo(diffImg, -1, 30, -300);
+
+            return diffImg;
+        }
+
 
         private static List<(int, int)> PolygonToTiles(Polygon polygon)
         {
@@ -244,7 +288,7 @@ namespace Satellite_Analyzer
             var (xmin, ymin) = PlanetReader.TileIndex(polygonEnvelope.YMin, -polygonEnvelope.XMin, mercator: true);
             var (xmax, ymax) = PlanetReader.TileIndex(polygonEnvelope.YMax, -polygonEnvelope.XMax, mercator: true);
 
-            for (int y = (int)ymax + 1; y >= (int)ymin; y--)
+            for (int y = (int)ymin; y <= (int)ymax + 1; y++)
             {
                 for (int x = (int)xmin; x <= (int)xmax + 1; x++)
                 {

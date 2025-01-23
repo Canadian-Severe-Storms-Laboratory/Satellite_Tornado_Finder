@@ -39,7 +39,7 @@ namespace Satellite_Analyzer
 
             try
             {       
-                img = await FetchImageTile(url);
+                (img, _) = await FetchImageTile(url);
                 ccMask = await FetchUDM(url);
             }
             catch (Exception e)
@@ -53,26 +53,27 @@ namespace Satellite_Analyzer
             return (img, ccMask, TileIndexToEnvelope(x, y), ((fx - x)*img.Width, img.Height - (y - fy)*img.Height));
         }
 
-        public async Task<(Mat, Mat, Envelope)> FindImage(int x, int y, int month, int year, string savePath=null)
+        public async Task<(Mat, Mat, Envelope, byte[])> FindImage(int x, int y, int month, int year, string savePath=null)
         {
             Mat img = new();
             Mat ccMask = new();
+            byte[] imgBytes = null;
 
             try
             {
                 string url = String.Format(BASEMAP_URL, baseMapDict[(month, year)], x, y);
-                img = await FetchImageTile(url, savePath);
+                (img, imgBytes) = await FetchImageTile(url);
                 ccMask = await FetchUDM(url);
             }
             catch (Exception e)
             {
                 //MessageBox.Show("Failed to load image from Planet\n\n" + e.Message);
-                return (null, null, null);
+                return (null, null, null, null);
             }
 
             //Cv2.CvtColor(img, img, ColorConversionCodes.BGRA2BGR);
 
-            return (img, ccMask, TileIndexToEnvelope(x, y));
+            return (img, ccMask, TileIndexToEnvelope(x, y), imgBytes);
         }
 
         public async Task BuildBaseMapDict() 
@@ -113,7 +114,7 @@ namespace Satellite_Analyzer
             }
         }
 
-        public async Task<Mat> FetchImageTile(string url, string savePath=null)
+        public async Task<(Mat, byte[])> FetchImageTile(string url)
         {
             HttpResponseMessage response = await client.GetAsync(url);
 
@@ -121,9 +122,9 @@ namespace Satellite_Analyzer
 
             byte[] imageBytes = await response.Content.ReadAsByteArrayAsync();
 
-            if (savePath != null) await File.WriteAllBytesAsync(savePath, imageBytes);
+            //if (savePath != null) await File.WriteAllBytesAsync(savePath, imageBytes);
 
-            return Cv2.ImDecode(imageBytes, ImreadModes.Color);
+            return (Cv2.ImDecode(imageBytes, ImreadModes.Color), imageBytes);
         }
 
         public async Task<Mat> FetchUDM(string url)
