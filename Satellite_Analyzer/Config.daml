@@ -1,0 +1,38 @@
+﻿<ArcGIS defaultAssembly="Satellite_Analyzer.dll" defaultNamespace="Satellite_Analyzer" xmlns="http://schemas.esri.com/DADF/Registry" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://schemas.esri.com/DADF/Registry file:///C:/Program%20Files/ArcGIS/Pro/bin/ArcGIS.Desktop.Framework.xsd">
+  <AddInInfo id="{aa81a9c9-d3d9-40b3-9fb9-b8684e2fcaeb}" version="1.0" desktopVersion="3.4.55405" product="ArcGISPro">
+    <Name>Satellite Analyzer</Name>
+    <Description>CSSL Satellite analysis tool</Description>
+    <Image>Images\AddinDesktop32.png</Image>
+    <Author>Daniel Butt</Author>
+    <Company>CSSL</Company>
+    <Date>12/2/2024 2:49:17 PM</Date>
+    <Subject>Framework</Subject>
+    <!-- Note subject can be one or more of these topics:
+                    Content, Framework, Editing, Geodatabase, Geometry, Geoprocessing, Layouts, Map Authoring, Map Exploration -->
+  </AddInInfo>
+  <modules>
+    <insertModule id="Satellite_Analyzer_Module" className="Module1" autoLoad="false" caption="Satellite Analyzer">
+      <!-- uncomment to have the control hosted on a separate tab-->
+      <tabs>
+        <tab id="Satellite_Analyzer_Tab1" caption="Satellite Analyzer">
+          <group refID="Satellite_Analyzer_Group1" />
+        </tab>
+      </tabs>
+      <groups>
+        <!-- comment this out if you have no controls on the Addin tab to avoid
+              an empty group
+        <group id="Satellite_Analyzer_Group1" caption="Group 1" appearsOnAddInTab="true">
+        </group> -->
+        <group id="Satellite_Analyzer_Group1" caption="Group 1" appearsOnAddInTab="false">
+          <button refID="Satellite_Analyzer_Main" size="large" />
+        </group>
+      </groups>
+      <controls>
+        <!-- add your controls here -->
+        <button id="Satellite_Analyzer_Main" caption="Analyze" className="ShowMain" loadOnClick="true" smallImage="GenericButtonPurple16" largeImage="GenericButtonPurple32">
+          <tooltip heading="Tooltip Heading">Tooltip text<disabledText /></tooltip>
+        </button>
+      </controls>
+    </insertModule>
+  </modules>
+</ArcGIS>

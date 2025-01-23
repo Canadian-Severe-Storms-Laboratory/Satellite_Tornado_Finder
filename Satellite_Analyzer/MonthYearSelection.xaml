@@ -1,0 +1,32 @@
+﻿<UserControl x:Class="Satellite_Analyzer.MonthYearSelection"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:Satellite_Analyzer"
+             mc:Ignorable="d" 
+             d:DesignHeight="30" d:DesignWidth="200">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="1*"/>
+            <ColumnDefinition Width="1*" />
+        </Grid.ColumnDefinitions>
+
+        <ComboBox SelectedIndex="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="0" x:Name="monthBox" Text="Month" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="12" FontWeight="Light">
+            <ComboBoxItem Content="January"></ComboBoxItem>
+            <ComboBoxItem Content="February"></ComboBoxItem>
+            <ComboBoxItem Content="March"></ComboBoxItem>
+            <ComboBoxItem Content="April"></ComboBoxItem>
+            <ComboBoxItem Content="May"></ComboBoxItem>
+            <ComboBoxItem Content="June"></ComboBoxItem>
+            <ComboBoxItem Content="July"></ComboBoxItem>
+            <ComboBoxItem Content="August"></ComboBoxItem>
+            <ComboBoxItem Content="September"></ComboBoxItem>
+            <ComboBoxItem Content="October"></ComboBoxItem>
+            <ComboBoxItem Content="November"></ComboBoxItem>
+            <ComboBoxItem Content="December"></ComboBoxItem>
+        </ComboBox>
+        <ComboBox SelectedIndex="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Grid.Column="1" x:Name="yearBox" Text="Year" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" FontSize="12" FontWeight="Light"></ComboBox>
+    </Grid>
+
+</UserControl>
