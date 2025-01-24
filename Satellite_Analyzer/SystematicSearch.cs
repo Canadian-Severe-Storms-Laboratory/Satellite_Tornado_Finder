@@ -86,9 +86,9 @@ namespace Satellite_Analyzer
 
             monitor.Start();
 
-            var downloadBlock = new TransformBlock<(int, int), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[])>(async (tile) =>
+            var downloadBlock = new TransformBlock<(int, int), (int, int, byte[], byte[], int, Envelope, byte[], byte[], int)>(async (tile) =>
             {
-                if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, null, null, null, null, null);
+                if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, 0, null, null, null, 0);
 
                 var watch = System.Diagnostics.Stopwatch.StartNew();
                 var (x, y) = tile;
@@ -97,31 +97,66 @@ namespace Satellite_Analyzer
                 string beforePath = savePath + "\\before" + imgName;
                 string afterPath = savePath + "\\after" + imgName;
 
-                var (beforeImg, beforeCCImg, envelope, beforeBytes) = await planetReader.FindImage(x, y, bMonth, bYear, beforePath);
-                if (beforeImg == null) return (x, y, null, null, null, null, null, null, null);
+                var (beforeBytes, beforeUDMBytes, envelope, beforeMaskType) = await planetReader.FindImage(x, y, bMonth, bYear, beforePath);
+                if (beforeBytes == null) return (x, y, null, null, 0, null, null, null, 0);
 
-                var (afterImg, afterCCImg, _, afterBytes) = await planetReader.FindImage(x, y, aMonth, aYear, afterPath);
-                if (afterImg == null) return (x, y, null, null, null, null, null, null, null);
+                var (afterBytes, afterUDMBytes, _, afterMaskType) = await planetReader.FindImage(x, y, aMonth, aYear, afterPath);
+                if (afterBytes == null) return (x, y, null, null, 0, null, null, null, 0);
 
                 watch.Stop();
                 Console.WriteLine($"Tile {x}, {y} downloaded in {watch.ElapsedMilliseconds} ms");
 
-                return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes);
+                return (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType);
             });
 
-            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[]), (int, int, int, Mat, Mat, byte[], byte[])>(async (packet) =>
+            var preprocessBlock = new TransformBlock<(int, int, byte[], byte[], int, Envelope, byte[], byte[], int), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[])>((packet) =>
             {
-                if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, null, null, null, null);
-
                 var watch = System.Diagnostics.Stopwatch.StartNew();
-                var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes) = packet;
 
-                if (beforeImg == null || afterImg == null) return (x, y, 0, null, null, null, null);
+                var (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType) = packet;
+
+                if (monitor.cancelled || beforeBytes == null || afterBytes == null) return (x, y, null, null, null, null, null, null, null);
+
+                Mat beforeImg = Cv2.ImDecode(beforeBytes, ImreadModes.Color);
+                Mat beforeCCImg = PlanetReader.DecodeUDM(beforeUDMBytes, beforeMaskType);
+                Mat afterImg = Cv2.ImDecode(afterBytes, ImreadModes.Color);
+                Mat afterCCImg = PlanetReader.DecodeUDM(afterUDMBytes, afterMaskType);
 
                 Cv2.MedianBlur(beforeImg, beforeImg, 7);
                 Cv2.MedianBlur(afterImg, afterImg, 7);
 
+                watch.Stop();
+                Console.WriteLine($"Tile {x}, {y} preprocessed in {watch.ElapsedMilliseconds} ms");
+
+                return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes);
+            });
+
+            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[]), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector)>((packet) =>
+            {
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+
+                var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes) = packet;
+
+                if (monitor.cancelled || beforeImg == null || afterImg == null) return (x, y, null, null, null, null, null, null, null, null);
+
                 ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
+
+                watch.Stop();
+                Console.WriteLine($"Tile {x}, {y} predicted in {watch.ElapsedMilliseconds} ms");
+
+                return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction);
+
+            });
+
+            var postProcessBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector), (int, int, int, Mat, Mat, byte[], byte[])> (async (packet) =>
+            {
+                if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, null, null, null, null);
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+
+                var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction) = packet;
+
+                if (beforeImg == null || afterImg == null) return (x, y, 0, null, null, null, null);
+
                 Mat predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
 
                 Mat landcoverImg = await LandCoverMask(envelope, beforeImg.Size());
@@ -141,7 +176,7 @@ namespace Satellite_Analyzer
                 int pxCount = Cv2.CountNonZero(predImg);
 
                 watch.Stop();
-                Console.WriteLine($"Tile {x}, {y} predicted in {watch.ElapsedMilliseconds} ms");
+                Console.WriteLine($"Tile {x}, {y} post processed in {watch.ElapsedMilliseconds} ms");
 
                 return (x, y, pxCount, predImg, diffImg, beforeBytes, afterBytes);
             });
@@ -221,8 +256,10 @@ namespace Satellite_Analyzer
                 MaxDegreeOfParallelism = 4
             });
 
-            downloadBlock.LinkTo(predictionBlock, new DataflowLinkOptions() { PropagateCompletion = true });
-            predictionBlock.LinkTo(saveBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+            downloadBlock.LinkTo(preprocessBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+            preprocessBlock.LinkTo(predictionBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+            predictionBlock.LinkTo(postProcessBlock, new DataflowLinkOptions() { PropagateCompletion = true });
+            postProcessBlock.LinkTo(saveBlock, new DataflowLinkOptions() { PropagateCompletion = true });
 
             foreach (var tile in tiles) await downloadBlock.SendAsync(tile);
 

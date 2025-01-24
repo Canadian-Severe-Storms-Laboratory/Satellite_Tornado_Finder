@@ -17,6 +17,7 @@ using System.Windows.Input;
 using ArcGIS.Desktop.Internal.Mapping;
 using System.Windows.Media;
 using OpenTK.Windowing.Common.Input;
+using ArcGIS.Desktop.Internal.Mapping.Locate;
 
 namespace Satellite_Analyzer
 {
@@ -83,8 +84,16 @@ namespace Satellite_Analyzer
             {
                 var (tileX, tileY) = tileSearchInput.GetTileIndex();
 
-                (beforeImg, beforeCCImg, envelope, _) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
-                (afterImg, afterCCImg, _, _) = await planetReader.FindImage(tileX, tileY, aMonth, aYear);
+                var (beforeBytes, beforeMaskBytes, envel, beforeMaskType) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
+
+                beforeImg = Cv2.ImDecode(beforeBytes, ImreadModes.Color);
+                beforeCCImg = PlanetReader.DecodeUDM(beforeMaskBytes, beforeMaskType);
+                envelope = envel;
+
+                var (afterBytes, afterMaskBytes, _, afterMaskType) = await planetReader.FindImage(tileX, tileY, aMonth, aYear);
+
+                afterImg = Cv2.ImDecode(afterBytes, ImreadModes.Color);
+                afterCCImg = PlanetReader.DecodeUDM(afterMaskBytes, afterMaskType);
             }
             else
             {
@@ -350,6 +359,8 @@ namespace Satellite_Analyzer
         {
             SearchResult result = (SearchResult)foundList.SelectedItem;
             tileSearchInput.SetTileIndex(result.tileX, result.tileY);
+
+            tileSearchInput.SearchType.SelectedIndex = 1;
 
             Search();
         }

@@ -8,10 +8,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using BitMiracle.LibTiff.Classic;
 using System.IO;
+using SkiaSharp;
 
 namespace Satellite_Analyzer
 {
-    class PlanetReader
+    public class PlanetReader
     {
         private static readonly string API_KEY = Environment.GetEnvironmentVariable("PL_API_KEY");
         private static readonly string MOSAIC_URL = "https://api.planet.com/basemaps/v1/mosaics?_page_size=250&api_key=" + API_KEY;
@@ -28,8 +29,8 @@ namespace Satellite_Analyzer
 
         public async Task<(Mat, Mat, Envelope, (double, double))> FindImage(double lat, double lon, int month, int year, bool mercator = false)
         {
-            Mat img = new();
-            Mat ccMask = new();
+            Mat img;
+            Mat ccMask;
             var (fx, fy) = TileIndex(lat, lon, mercator);
 
             int x = (int)Math.Floor(fx);
@@ -39,41 +40,35 @@ namespace Satellite_Analyzer
 
             try
             {       
-                (img, _) = await FetchImageTile(url);
-                ccMask = await FetchUDM(url);
+                byte[] imageBytes = await FetchImageTile(url);
+                img = Cv2.ImDecode(imageBytes, ImreadModes.Color);
+
+                var (maskBytes, maskType) = await FetchUDM(url);
+
+                ccMask = DecodeUDM(maskBytes, maskType);
             }
             catch (Exception e)
             {
-                MessageBox.Show("Failed to load image from Planet\n\n" + e.Message);
                 return (null, null, null, (0, 0));
             }
-
-            //Cv2.CvtColor(img, img, ColorConversionCodes.BGRA2BGR);
 
             return (img, ccMask, TileIndexToEnvelope(x, y), ((fx - x)*img.Width, img.Height - (y - fy)*img.Height));
         }
 
-        public async Task<(Mat, Mat, Envelope, byte[])> FindImage(int x, int y, int month, int year, string savePath=null)
+        public async Task<(byte[], byte[], Envelope, int)> FindImage(int x, int y, int month, int year, string savePath=null)
         {
-            Mat img = new();
-            Mat ccMask = new();
-            byte[] imgBytes = null;
-
             try
             {
                 string url = String.Format(BASEMAP_URL, baseMapDict[(month, year)], x, y);
-                (img, imgBytes) = await FetchImageTile(url);
-                ccMask = await FetchUDM(url);
+                byte[] imgBytes = await FetchImageTile(url);
+                var (maskBytes, maskType) = await FetchUDM(url);
+
+                return (imgBytes, maskBytes, TileIndexToEnvelope(x, y), maskType);
             }
             catch (Exception e)
             {
-                //MessageBox.Show("Failed to load image from Planet\n\n" + e.Message);
-                return (null, null, null, null);
+                return (null, null, null, 0);
             }
-
-            //Cv2.CvtColor(img, img, ColorConversionCodes.BGRA2BGR);
-
-            return (img, ccMask, TileIndexToEnvelope(x, y), imgBytes);
         }
 
         public async Task BuildBaseMapDict() 
@@ -114,20 +109,16 @@ namespace Satellite_Analyzer
             }
         }
 
-        public async Task<(Mat, byte[])> FetchImageTile(string url)
+        public async Task<byte[]> FetchImageTile(string url)
         {
             HttpResponseMessage response = await client.GetAsync(url);
 
             response.EnsureSuccessStatusCode();
 
-            byte[] imageBytes = await response.Content.ReadAsByteArrayAsync();
-
-            //if (savePath != null) await File.WriteAllBytesAsync(savePath, imageBytes);
-
-            return (Cv2.ImDecode(imageBytes, ImreadModes.Color), imageBytes);
+            return await response.Content.ReadAsByteArrayAsync();
         }
 
-        public async Task<Mat> FetchUDM(string url)
+        public async Task<(byte[], int)> FetchUDM(string url)
         {
             bool udm1 = false;
 
@@ -140,15 +131,22 @@ namespace Satellite_Analyzer
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {
-                    return new Mat(new OpenCvSharp.Size(4096, 4096), MatType.CV_8UC3, Scalar.All(255));
+                    return (null, 0);
                 }
             }
 
             response.EnsureSuccessStatusCode();
 
-            byte[] imageBytes = await response.Content.ReadAsByteArrayAsync();
+            return (await response.Content.ReadAsByteArrayAsync(), udm1 ? 1 : 2);
 
-            return udm1 ? DecodeUDM1(imageBytes) : DecodeUDM2(imageBytes);
+            //return udm1 ? DecodeUDM1(imageBytes) : DecodeUDM2(imageBytes);
+        }
+
+        public static Mat DecodeUDM(byte[] imageBytes, int type)
+        {
+            if (type == 1) return DecodeUDM1(imageBytes);
+            else if (type == 2) return DecodeUDM2(imageBytes);
+            else return new Mat(new OpenCvSharp.Size(4096, 4096), MatType.CV_8UC3, Scalar.All(255));
         }
 
         public static Mat DecodeUDM1(byte[] imageBytes)
