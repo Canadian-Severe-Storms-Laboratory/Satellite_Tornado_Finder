@@ -65,6 +65,8 @@ namespace Satellite_Analyzer
             planetReader = new();
             await planetReader.BuildBaseMapDict();
 
+            await LandCover.Initalize();
+
             tiles = PolygonToTiles(polygon);
 
             significantTiles = [];

@@ -92,6 +92,12 @@ namespace ArcGISUtils
             return map.GetLayersAsFlattenedList().OfType<RasterLayer>();
         }
 
+        public static byte[] BitmapToBytes(System.Drawing.Bitmap img)
+        {
+            System.Drawing.ImageConverter converter = new ();
+            return (byte[])converter.ConvertTo(img, typeof(byte[]));
+        }
+
         public static RasterLayer LoadRasterLayer(string directory, string name, ILayerContainerEdit group=null)
         {
             var rasterDataset = OpenRasterDataset(directory, name);

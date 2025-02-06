@@ -13,6 +13,7 @@
         Title="Satellite Searching" MinHeight="900" MinWidth="1280"
         Loaded="WindowLoaded"
         WindowStartupLocation="CenterOwner"
+        PreviewKeyDown="HandleKeyPressed"
     >
     <controls:ProWindow.Resources>
         <ResourceDictionary>
@@ -54,7 +55,7 @@
 
         <Label x:Name="executionProviderLabel" Grid.Column="2" Content="" HorizontalAlignment="Center" Margin="0,0,0,80" VerticalAlignment="Bottom" FontSize="18" FontWeight="Bold"/>
 
-        <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Next" HorizontalAlignment="Center" Margin="0,0,0,10" Height="30" Width="100" Click="NextTile"/>
+        <Button x:Name="nextButton" Grid.Column="2" VerticalAlignment="Bottom" Content="Next" HorizontalAlignment="Center" Margin="0,0,0,10" Height="30" Width="100" Click="NextTile"/>
 
     </Grid>
 </controls:ProWindow>

@@ -169,12 +169,6 @@ namespace Satellite_Analyzer
             };
         }
 
-        public static byte[] BitmapToBytes(Bitmap img)
-        {
-            ImageConverter converter = new ImageConverter();
-            return (byte[])converter.ConvertTo(img, typeof(byte[]));
-        }
-
         private async void WindowLoaded(object sender, RoutedEventArgs e)
         {
             loadingLabel.Visibility = Visibility.Visible;

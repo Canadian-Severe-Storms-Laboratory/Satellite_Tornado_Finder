@@ -1,10 +1,15 @@
 ﻿using ArcGIS.Desktop.Framework.Threading.Tasks;
 using ArcGIS.Desktop.Internal.Mapping;
 using ArcGIS.Desktop.Mapping;
+using OpenCvSharp;
+using OpenCvSharp.Extensions;
 using ScottPlot;
 using ScottPlot.Plottables;
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -16,8 +21,11 @@ namespace Satellite_Analyzer
     public partial class SearchWindow : ArcGIS.Desktop.Framework.Controls.ProWindow
     {
         private bool loaded = false;
+        private string savePath;
 
-        private List<ImageRect> imgPlottables = [];
+        private List<ImageRect> imgPlottables;
+        private List<ImageRect> nextImgPlottables;
+        private int lastResultIndex = 0;
 
         public SearchWindow()
         {
@@ -38,6 +46,7 @@ namespace Satellite_Analyzer
             loadingLabel.Visibility = Visibility.Hidden;
 
             mainPlot.Refresh();
+            mainPlot.Plot.Axes.AutoScale();
         }
 
         private async void WindowLoaded(object sender, RoutedEventArgs e)
@@ -78,11 +87,11 @@ namespace Satellite_Analyzer
             switch (e.Key)
             {
                 case Key.Down:
-                    imageList.SelectedIndex = 7;
+                    imageList.SelectedIndex = 2;
                     break;
 
                 case Key.Up:
-                    imageList.SelectedIndex = 8;
+                    imageList.SelectedIndex = 3;
                     break;
 
                 case Key.Left:
@@ -103,16 +112,36 @@ namespace Satellite_Analyzer
             e.Handled = true;
         }
 
-        private void foundList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+        private async void foundList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            if (foundList.SelectedItem == null) return;
+            if (foundList == null || foundList.SelectedItem == null) return;
 
-            SearchResult result = (SearchResult)foundList.SelectedItem;
-            //tileSearchInput.SetTileIndex(result.tileX, result.tileY);
+            foundList.IsEnabled = false;
+            nextButton.IsEnabled = false;
 
-            //tileSearchInput.SearchType.SelectedIndex = 1;
+            if (lastResultIndex + 1 == foundList.SelectedIndex)
+            {
+                imgPlottables = nextImgPlottables;
+            }
+            else
+            {
+                SearchResult r = (SearchResult)foundList.SelectedItem;
+                await QueuedTask.Run(() => imgPlottables = LoadTileImages(r));
+            }
 
-            //Search();
+            lastResultIndex = foundList.SelectedIndex;
+
+            UpdatePlot();
+
+            SearchResult result = (SearchResult)foundList.Items[Math.Min(foundList.SelectedIndex + 1, foundList.Items.Count - 1)];
+
+            _ = QueuedTask.Run(() =>
+            {
+                nextImgPlottables = LoadTileImages(result);
+
+                foundList.Dispatcher.Invoke(() => foundList.IsEnabled = true);
+                nextButton.Dispatcher.Invoke(() => nextButton.IsEnabled = true);
+            });
         }
 
         private async void RunSystematicSearch(object sender, RoutedEventArgs e)
@@ -137,10 +166,42 @@ namespace Satellite_Analyzer
             foundList.Items.Clear();
 
             foreach (var result in results) foundList.Items.Add(result);
+
+            savePath = SystematicSearch.GetSavePath();
+
+            foundList.SelectedIndex = 0;
+        }
+
+        private List<ImageRect> LoadTileImages(SearchResult result)
+        {
+            string imgName = $"_{result.tileX}_{result.tileY}";
+
+            List<ImageRect> imageRects = [
+                LoadImageRect(savePath + "\\before" + imgName + ".png"),
+                LoadImageRect(savePath + "\\after" + imgName + ".png"),
+                LoadImageRect(savePath + "\\diff" + imgName + ".tif"),
+                LoadImageRect(savePath + "\\pred" + imgName + ".tif"),
+            ];
+
+            return imageRects;
+        }
+
+        private ImageRect LoadImageRect(string filePath)
+        {
+            Mat image = Cv2.ImRead(filePath);
+
+            return new ImageRect
+            {
+                Image = new(BitmapToBytes(BitmapConverter.ToBitmap(image))),
+                Rect = new(0, image.Cols, 0, image.Rows)
+            };
         }
 
         private void NextTile(object sender, RoutedEventArgs e)
         {
+            if (foundList == null || foundList.SelectedItem == null || 
+                foundList.SelectedIndex == foundList.Items.Count - 1) return;
+
             foundList.SelectedIndex += 1;
         }
     }
