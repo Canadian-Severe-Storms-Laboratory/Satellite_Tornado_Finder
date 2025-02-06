@@ -8,6 +8,7 @@ using OpenCvSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
@@ -80,6 +81,15 @@ namespace ArcGISUtils
         public static string GetProjectPath()
         {
             return System.IO.Path.GetDirectoryName(ArcGIS.Desktop.Core.Project.Current.URI);
+        }
+
+        private static IEnumerable<RasterLayer> GetRasterLayers()
+        {
+            //get current map
+            var map = MapView.Active.Map;
+
+            //get all raster layers on map
+            return map.GetLayersAsFlattenedList().OfType<RasterLayer>();
         }
 
         public static RasterLayer LoadRasterLayer(string directory, string name, ILayerContainerEdit group=null)
@@ -192,27 +202,27 @@ namespace ArcGISUtils
         public static unsafe void WriteRaster<T>(Mat im, Raster raster) where T : unmanaged
         {
             Mat tIm = im.T();
-            var pixelBlock = raster.CreatePixelBlock(raster.GetWidth(), raster.GetHeight());
-            //raster.Read(0, 0, pixelBlock);
+            var pixelBlock = raster.CreatePixelBlock(im.Width, im.Height);
+            T[,] rasterData = new T[im.Width, im.Height];
+
+            GCHandle handle = GCHandle.Alloc(rasterData, GCHandleType.Pinned);
+            IntPtr ptr = handle.AddrOfPinnedObject();
+            int size = Marshal.SizeOf(typeof(T)) * im.Width * im.Height;
+
+            var dstSpan = new Span<byte>(ptr.ToPointer(), size);
 
             for (int b = 0; b < im.Channels(); b++)
             {
                 Mat band = tIm.ExtractChannel(b);
-                var rasterData = (T[,])pixelBlock.GetPixelData(b, false);
-
-                GCHandle handle = GCHandle.Alloc(rasterData, GCHandleType.Pinned);
-                IntPtr ptr = handle.AddrOfPinnedObject();
-                int size = Marshal.SizeOf(typeof(T)) * raster.GetWidth() * raster.GetHeight();
 
                 var srcSpan = new Span<byte>(band.DataPointer, size);
-                var dstSpan = new Span<byte>(ptr.ToPointer(), size);
-
+                
                 srcSpan.CopyTo(dstSpan);
-
-                handle.Free();
 
                 pixelBlock.SetPixelData(b, rasterData);
             }
+
+            handle.Free();
 
             raster.Write(0, 0, pixelBlock);
             raster.Refresh();
@@ -224,14 +234,14 @@ namespace ArcGISUtils
         {
             Mat tIm = im.T();
 
-            PixelBlock pixelBlock = raster.CreatePixelBlock(raster.GetWidth(), raster.GetHeight());
+            PixelBlock pixelBlock = raster.CreatePixelBlock(im.Width, im.Height);
 
-            var rasterData = (byte[,])pixelBlock.GetPixelData(0, false);
+            byte[,] rasterData = new byte[im.Width, im.Height];
 
             GCHandle handle = GCHandle.Alloc(rasterData, GCHandleType.Pinned);
             IntPtr ptr = handle.AddrOfPinnedObject();
 
-            int size = raster.GetWidth() * raster.GetHeight();
+            int size = im.Width * im.Height;
 
             var srcSpan = new Span<byte>(tIm.DataPointer, size);
             var dstSpan = new Span<byte>(ptr.ToPointer(), size);

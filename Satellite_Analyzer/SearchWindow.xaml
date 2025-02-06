@@ -1,4 +1,4 @@
-﻿<controls:ProWindow x:Class="Satellite_Analyzer.Main"
+﻿<controls:ProWindow x:Class="Satellite_Analyzer.SearchWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:controls="clr-namespace:ArcGIS.Desktop.Framework.Controls;assembly=ArcGIS.Desktop.Framework"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
@@ -10,7 +10,7 @@
         mc:Ignorable="d"
         ResizeMode="CanResize"
         ShowMinButton="True" 
-        Title="Event Viewer" MinHeight="900" MinWidth="1280"
+        Title="Satellite Searching" MinHeight="900" MinWidth="1280"
         Loaded="WindowLoaded"
         WindowStartupLocation="CenterOwner"
     >
@@ -21,47 +21,40 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </controls:ProWindow.Resources>
-
-    <Grid PreviewKeyDown="HandleKeyPressed">
-
+    <Grid>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1*"/>
+            <ColumnDefinition Width="1*" />
             <ColumnDefinition Width="4*" />
             <ColumnDefinition Width="1*" />
         </Grid.ColumnDefinitions>
 
-        <local:TileSearchInput x:Name="tileSearchInput" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20, 0, 20, 0" />
+        <local:RasterSelectionBox x:Name="PolygonSelection" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20, 50, 20, 0" />
 
-        <Button Click="Search" Grid.Column="0" Content="Search" HorizontalAlignment="Left" VerticalAlignment="Top" Width="80" Margin="10,270,0,0" FontSize="14" FontWeight="Bold"/>
+        <Label Grid.Column="0" Content="Polygon Search Area" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,20,0,0" FontSize="14" FontWeight="Bold"/>
 
-        <Label Grid.Column="0" Content="Saved Events" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,325,0,0" FontSize="14" FontWeight="Bold"/>
-        <ListBox x:Name="eventList" SelectionChanged="UpdateSearchParams" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="20,360,20,20"/>
+        <Button Click="RunSystematicSearch" Grid.Column="0" Content="Search" HorizontalAlignment="Left" VerticalAlignment="Top" Width="80" Margin="10,270,0,0" FontSize="14" FontWeight="Bold"/>
 
-        <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Save" HorizontalAlignment="Center" Margin="0,0,0,10" Height="30" Width="100" Click="Save"/>
+        <Label Grid.Column="0" Content="Significant Tiles" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,325,0,0" FontSize="14" FontWeight="Bold"/>
+        <ListBox x:Name="foundList" SelectionChanged="foundList_SelectionChanged" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="20,360,20,20"/>
 
         <Label Grid.Column="0" Content="Before Date" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,120,0,0" FontSize="14" FontWeight="Bold"/>
         <local:MonthYearSelection x:Name="beforeDate" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,150,20,0" Height="25"/>
         <Label Grid.Column="0" Content="After Date" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,190,0,0" FontSize="14" FontWeight="Bold"/>
         <local:MonthYearSelection x:Name="afterDate" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,220,20,0" Height="25"/>
 
-        <ScottPlot:WpfPlot x:Name="mainPlot" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" PreviewMouseDown="AddMarker"/>
+        <ScottPlot:WpfPlot x:Name="mainPlot" Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
         <Label x:Name="loadingLabel" Visibility="Hidden" Grid.Column="1" Content="Loading..." HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,10,0,0" FontSize="24" FontWeight="Bold" Foreground="Blue" Background="White"/>
 
         <ListBox x:Name="imageList" Grid.Column="2" SelectedIndex="0" SelectionChanged="UpdatePlot" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="20,20,20,125" FontSize="14" FontWeight="Bold">
             <ListBoxItem Content="Before" Height="50"/>
             <ListBoxItem Content="After" Height="50"/>
-            <ListBoxItem Content="Landcover" Height="50"/>
-            <ListBoxItem Content="Before Cloudcover" Height="50"/>
-            <ListBoxItem Content="After Cloudcover" Height="50"/>
-            <ListBoxItem Content="Before UDM" Height="50"/>
-            <ListBoxItem Content="After UDM" Height="50"/>
             <ListBoxItem Content="Difference" Height="50"/>
             <ListBoxItem Content="Prediction" Height="50"/>
         </ListBox>
 
         <Label x:Name="executionProviderLabel" Grid.Column="2" Content="" HorizontalAlignment="Center" Margin="0,0,0,80" VerticalAlignment="Bottom" FontSize="18" FontWeight="Bold"/>
 
+        <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Next" HorizontalAlignment="Center" Margin="0,0,0,10" Height="30" Width="100" Click="NextTile"/>
+
     </Grid>
-
-
 </controls:ProWindow>

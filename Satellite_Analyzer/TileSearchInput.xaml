@@ -6,7 +6,7 @@
              xmlns:local="clr-namespace:Satellite_Analyzer"
              mc:Ignorable="d" 
              d:DesignHeight="150" d:DesignWidth="200">
-    <Grid Background="White">
+    <Grid>
         <ComboBox x:Name="SearchType" SelectionChanged="SearchType_SelectionChanged" HorizontalContentAlignment="Center" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="0,10,0,0" Height="25" FontSize="14" FontWeight="Bold" SelectedIndex="0">
             <ComboBoxItem Content="Coordinate Search"/>
             <ComboBoxItem Content="Tile Index Search"/>

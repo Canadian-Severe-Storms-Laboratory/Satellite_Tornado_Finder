@@ -16,6 +16,9 @@
     <Page Update="MonthYearSelection.xaml">
       <SubType>Designer</SubType>
     </Page>
+    <Page Update="SearchWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
     <Page Update="TileSearchInput.xaml">
       <SubType>Designer</SubType>
     </Page>

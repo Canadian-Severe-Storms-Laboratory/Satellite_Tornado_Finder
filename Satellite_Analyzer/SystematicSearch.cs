@@ -44,6 +44,11 @@ namespace Satellite_Analyzer
             return path;
         }
 
+        public static string GetSavePath()
+        {
+            return savePath;
+        }
+
         private static PlanetReader planetReader;
         private static TornadoPatchPredictor tpp;
         private static List<(int, int)> tiles;
@@ -52,16 +57,10 @@ namespace Satellite_Analyzer
         private static GroupLayer predGroup;
         private static GroupLayer diffGroup;
         private static Monitor monitor;
-        private static int bMonth, bYear, aMonth, aYear;
 
-        private static async Task InitalizeSearch(Polygon polygon, int bM, int bY, int aM, int aY)
+        private static async Task InitalizeSearch(Polygon polygon)
         {
             OpenConsole();
-
-            bMonth = bM;
-            bYear = bY;
-            aMonth = aM;
-            aYear = aY;
 
             planetReader = new();
             await planetReader.BuildBaseMapDict();
@@ -82,7 +81,7 @@ namespace Satellite_Analyzer
 
         public static async Task<List<SearchResult>> Search(Polygon polygon, int bMonth, int bYear, int aMonth, int aYear)
         {
-            await InitalizeSearch(polygon, bMonth, bYear, aMonth, aYear);
+            await InitalizeSearch(polygon);
 
             monitor.Start();
 
@@ -122,8 +121,8 @@ namespace Satellite_Analyzer
                 Mat afterImg = Cv2.ImDecode(afterBytes, ImreadModes.Color);
                 Mat afterCCImg = PlanetReader.DecodeUDM(afterUDMBytes, afterMaskType);
 
-                Cv2.MedianBlur(beforeImg, beforeImg, 7);
-                Cv2.MedianBlur(afterImg, afterImg, 7);
+                Cv2.MedianBlur(beforeImg, beforeImg, 5);
+                Cv2.MedianBlur(afterImg, afterImg, 5);
 
                 watch.Stop();
                 Console.WriteLine($"Tile {x}, {y} preprocessed in {watch.ElapsedMilliseconds} ms");
@@ -213,6 +212,8 @@ namespace Satellite_Analyzer
                 await QueuedTask.Run(() =>
                 {
                     var rd = DuplicateRasterDataset(savePath, "before" + imgName, savePath, $"pred_{x}_{y}.tif");
+                    File.Copy(savePath + $"\\pred_{x}_{y}.tif", savePath + $"\\diff_{x}_{y}.tif", true);
+
                     Raster raster = rd.CreateFullRaster();
 
                     WriteByteRaster(predImg, raster, channels: 4);
@@ -230,7 +231,8 @@ namespace Satellite_Analyzer
 
                     layer.SetColorizer(colorizer);
 
-                    rd = DuplicateRasterDataset(savePath, "before" + imgName, savePath, $"diff_{x}_{y}.tif");
+                    //rd = DuplicateRasterDataset(savePath, "before" + imgName, savePath, $"diff_{x}_{y}.tif");
+                    rd = OpenRasterDataset(savePath, $"diff_{x}_{y}.tif");
                     raster = rd.CreateFullRaster();
 
                     WriteRaster<byte>(diffImg, raster);

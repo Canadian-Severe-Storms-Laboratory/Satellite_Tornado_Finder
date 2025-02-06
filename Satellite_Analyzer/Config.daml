@@ -25,11 +25,15 @@
         </group> -->
         <group id="Satellite_Analyzer_Group1" caption="Group 1" appearsOnAddInTab="false">
           <button refID="Satellite_Analyzer_Main" size="large" />
+          <button refID="Satellite_Analyzer_SearchWindow" size="large" />
         </group>
       </groups>
       <controls>
         <!-- add your controls here -->
-        <button id="Satellite_Analyzer_Main" caption="Analyze" className="ShowMain" loadOnClick="true" smallImage="GenericButtonPurple16" largeImage="GenericButtonPurple32">
+        <button id="Satellite_Analyzer_Main" caption="Event Viewer" className="ShowMain" loadOnClick="true" smallImage="GenericButtonGreen16" largeImage="GenericButtonGreen32">
+          <tooltip heading="Tooltip Heading">Tooltip text<disabledText /></tooltip>
+        </button>
+        <button id="Satellite_Analyzer_SearchWindow" caption="Systematic Search" className="ShowSearchWindow" loadOnClick="true" smallImage="GenericButtonPurple16" largeImage="GenericButtonPurple32">
           <tooltip heading="Tooltip Heading">Tooltip text<disabledText /></tooltip>
         </button>
       </controls>

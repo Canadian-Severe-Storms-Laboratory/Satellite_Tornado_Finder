@@ -50,7 +50,6 @@ namespace Satellite_Analyzer
             InitializeComponent();
 
             LoadSavedEvents();
-
         }
 
         private void LoadSavedEvents()
@@ -110,8 +109,8 @@ namespace Satellite_Analyzer
                 return;
             }
 
-            Cv2.MedianBlur(beforeImg, beforeImg, 7);
-            Cv2.MedianBlur(afterImg, afterImg, 7);
+            Cv2.MedianBlur(beforeImg, beforeImg, 5);
+            Cv2.MedianBlur(afterImg, afterImg, 5);
 
             ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
             predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
@@ -209,15 +208,6 @@ namespace Satellite_Analyzer
             }
 
             loaded = true;
-        }
-
-        private IEnumerable<RasterLayer> GetRasterLayers()
-        {
-            //get current map
-            var map = MapView.Active.Map;
-
-            //get all raster layers on map
-            return map.GetLayersAsFlattenedList().OfType<RasterLayer>();
         }
 
         private void UpdateSearchParams(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -343,46 +333,35 @@ namespace Satellite_Analyzer
             }
         }
 
-        private void RemoveRect(object sender, KeyEventArgs e)
+        private void HandleKeyPressed(object sender, KeyEventArgs e)
         {
-            if (rects.IsNullOrEmpty()) return;
-
-            if (e.Key == Key.Z)
+            switch (e.Key)
             {
-                mainPlot.Plot.PlottableList.Remove(rects.Last());
-                rects.RemoveAt(rects.Count - 1);
-                mainPlot.Refresh();
+                case Key.Down:
+                    imageList.SelectedIndex = 7;
+                    break;
+
+                case Key.Up:
+                    imageList.SelectedIndex = 8;
+                    break;
+
+                case Key.Left:
+                    imageList.SelectedIndex = 0;
+                    break;
+
+                case Key.Right:
+                    imageList.SelectedIndex = 1;
+                    break;
+
+                case Key.Z:
+                    if (rects.IsNullOrEmpty()) return;
+                    mainPlot.Plot.PlottableList.Remove(rects.Last());
+                    rects.RemoveAt(rects.Count - 1);
+                    mainPlot.Refresh();
+                    break;
             }
-        }
 
-        private void foundList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-        {
-            SearchResult result = (SearchResult)foundList.SelectedItem;
-            tileSearchInput.SetTileIndex(result.tileX, result.tileY);
-
-            tileSearchInput.SearchType.SelectedIndex = 1;
-
-            Search();
-        }
-
-        private async void RunSystematicSearch(object sender, RoutedEventArgs e)
-        {
-            var (bMonth, bYear) = beforeDate.GetDate();
-            var (aMonth, aYear) = afterDate.GetDate();
-
-            FeatureLayer polygonLayer = PolygonSelection.GetSelectedLayer();
-
-            var polygons = await QueuedTask.Run(() => ReadShapes<ArcGIS.Core.Geometry.Polygon>(polygonLayer));
-
-            var results = await SystematicSearch.Search(polygons[0], bMonth, bYear, aMonth, aYear);
-
-            results = [.. results.OrderByDescending(result => result.pixelCount)];
-
-            foundList.Items.Clear();
-            foreach (var result in results)
-            {
-                foundList.Items.Add(result);
-            }
+            e.Handled = true;
         }
     }
 }
