@@ -5,10 +5,12 @@ using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using ScottPlot;
 using ScottPlot.Plottables;
+using SkiaSharp;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -55,17 +57,10 @@ namespace Satellite_Analyzer
 
             PreLoadDlls();
 
-            var plt = mainPlot.Plot;
-            plt.Axes.SquareUnits();
-            plt.Layout.Frameless();
-            plt.DataBackground.Color = ScottPlot.Colors.Black;
-            plt.HideAxesAndGrid();
-
-            mainPlot.Refresh();
+            SetupPlot();
 
             loadingLabel.Visibility = Visibility.Hidden;
 
-            //update to relative path...
             TornadoPatchPredictor tpp = new(AddinAssemblyLocation() + "\\tornado_patch_predictor_de_norm.onnx");
 
             if (tpp.usingGPU)
@@ -80,6 +75,24 @@ namespace Satellite_Analyzer
             }
 
             loaded = true;
+        }
+
+        private void SetupPlot()
+        {
+            //mainPlot.Menu.Clear();
+
+            //mainPlot.Menu.Add("Tornado", (plot) => { plot.Plot.Add.Marker(lastMouseLocation.X, lastMouseLocation.Y, MarkerShape.Asterisk, 30, color: ScottPlot.Color.FromColor(System.Drawing.Color.Green)); });
+            //mainPlot.Menu.Add("Downburst", (plot) => { plot.Plot.Add.Marker(lastMouseLocation.X, lastMouseLocation.Y, MarkerShape.Asterisk, 30, color: ScottPlot.Color.FromColor(System.Drawing.Color.Orange)); });
+            //mainPlot.Menu.Add("Unclassified", (plot) => { plot.Plot.Add.Marker(lastMouseLocation.X, lastMouseLocation.Y, MarkerShape.Asterisk, 30, color: ScottPlot.Color.FromColor(System.Drawing.Color.Blue)); });
+            //mainPlot.Menu.Add("Other", (plot) => { plot.Plot.Add.Marker(lastMouseLocation.X, lastMouseLocation.Y, MarkerShape.Asterisk, 30, color: ScottPlot.Color.FromColor(System.Drawing.Color.Red)); });
+
+            var plt = mainPlot.Plot;
+            plt.Axes.SquareUnits();
+            plt.Layout.Frameless();
+            plt.DataBackground.Color = ScottPlot.Colors.Black;
+            plt.HideAxesAndGrid();
+
+            mainPlot.Refresh();
         }
 
         private void HandleKeyPressed(object sender, KeyEventArgs e)
@@ -112,6 +125,20 @@ namespace Satellite_Analyzer
             e.Handled = true;
         }
 
+        Coordinates lastMouseLocation = new(0, 0);
+
+        private void SaveMouseCoords(object sender, MouseButtonEventArgs e)
+        {
+            if (e.RightButton == System.Windows.Input.MouseButtonState.Pressed)
+            {
+                var plt = mainPlot.Plot;
+                var position = e.GetPosition(mainPlot);
+                Pixel mousePixel = new(position.X * mainPlot.DisplayScale, position.Y * mainPlot.DisplayScale);
+
+                lastMouseLocation = plt.GetCoordinates(mousePixel);
+            }
+        }
+
         private async void foundList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             if (foundList == null || foundList.SelectedItem == null) return;
@@ -137,12 +164,16 @@ namespace Satellite_Analyzer
 
             _ = QueuedTask.Run(() =>
             {
+                MapView.Active.ZoomToAsync(resultLayers[lastResultIndex]);
+
                 nextImgPlottables = LoadTileImages(result);
 
                 foundList.Dispatcher.Invoke(() => foundList.IsEnabled = true);
                 nextButton.Dispatcher.Invoke(() => nextButton.IsEnabled = true);
             });
         }
+
+        List<RasterLayer> resultLayers;
 
         private async void RunSystematicSearch(object sender, RoutedEventArgs e)
         {
@@ -169,7 +200,54 @@ namespace Satellite_Analyzer
 
             savePath = SystematicSearch.GetSavePath();
 
+            resultLayers = FindResultLayers(results);
+
             foundList.SelectedIndex = 0;
+        }
+
+        private List<RasterLayer> FindResultLayers(List<SearchResult> results)
+        {
+            List<RasterLayer> layers = [];
+
+            var rasterLayers = GetRasterLayers();
+
+            bool failed = false;
+
+            foreach (var result in results)
+            {
+                string imgName = $"_{result.tileX}_{result.tileY}.tif";
+
+                bool found = false;
+
+                foreach (var layer in rasterLayers)
+                {
+                    if (layer.Name == "pred" + imgName)
+                    {
+                        layers.Add(layer);
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    try
+                    {
+                        LoadRasterLayer(savePath, "diff" + imgName);
+                        RasterLayer rl = LoadRasterLayer(savePath, "pred" + imgName);
+                        layers.Add(rl);
+                    }
+                    catch
+                    {
+                        layers.Add(null);
+                        failed = true;
+                    }
+                }
+            }
+
+            if (failed) MessageBox.Show("Some layers failed to load");
+            
+            return layers;
         }
 
         private List<ImageRect> LoadTileImages(SearchResult result)
@@ -189,10 +267,20 @@ namespace Satellite_Analyzer
         private ImageRect LoadImageRect(string filePath)
         {
             Mat image = Cv2.ImRead(filePath);
+            Cv2.CvtColor(image, image, ColorConversionCodes.BGR2RGBA);
+
+            SKBitmap bmp = new();
+            SKImageInfo info = new(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+            bool succeeded = bmp.InstallPixels(info, image.Data, info.RowBytes);
+
+            if (!succeeded)
+            {
+                return new ImageRect();
+            }
 
             return new ImageRect
             {
-                Image = new(BitmapToBytes(BitmapConverter.ToBitmap(image))),
+                Image = new(bmp),
                 Rect = new(0, image.Cols, 0, image.Rows)
             };
         }

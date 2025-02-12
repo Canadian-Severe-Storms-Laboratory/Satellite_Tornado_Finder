@@ -83,12 +83,10 @@ namespace ArcGISUtils
             return System.IO.Path.GetDirectoryName(ArcGIS.Desktop.Core.Project.Current.URI);
         }
 
-        private static IEnumerable<RasterLayer> GetRasterLayers()
+        public static IEnumerable<RasterLayer> GetRasterLayers()
         {
-            //get current map
             var map = MapView.Active.Map;
 
-            //get all raster layers on map
             return map.GetLayersAsFlattenedList().OfType<RasterLayer>();
         }
 
@@ -139,6 +137,7 @@ namespace ArcGISUtils
                 bands[b] = new Mat(height, width, UnmangedToMatType<T>());
                 var rasterData = (T[,])pixelBlock.GetPixelData(b, false);
 
+                //TODO: use direct memcopy instead like with WriteRaster
                 ForeachPixel(bands[b], (i, j) =>
                 {
                     bands[b].Set(i, j, rasterData[j, i]);
@@ -310,14 +309,8 @@ namespace ArcGISUtils
         {
             using FeatureClass featureClass = layer.GetFeatureClass();
             using Datastore datastore = featureClass.GetDatastore();
-            if (datastore is FileSystemDatastore)
-            {
-                return true;
-            }
-            else
-            {
-                return false;
-            }
+
+            return datastore is FileSystemDatastore;
         }
 
         public static bool IsShapeFileOfType<T>(FeatureLayer layer) where T : Geometry
