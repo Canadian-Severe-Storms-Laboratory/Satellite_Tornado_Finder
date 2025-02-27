@@ -39,15 +39,20 @@ namespace Satellite_Analyzer
             string url = String.Format(BASEMAP_URL, baseMapDict[(month, year)], x, y);
 
             try
-            {       
-                byte[] imageBytes = await FetchImageTile(url);
+            {
+                var imgTask = FetchImageTile(url);
+                var maskTask = FetchUDM(url);
+
+                await Task.WhenAll(imgTask, maskTask);
+
+                byte[] imageBytes = imgTask.Result;
                 img = Cv2.ImDecode(imageBytes, ImreadModes.Color);
 
-                var (maskBytes, maskType) = await FetchUDM(url);
+                var (maskBytes, maskType) = maskTask.Result;
 
                 ccMask = DecodeUDM(maskBytes, maskType);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return (null, null, null, (0, 0));
             }
@@ -60,12 +65,18 @@ namespace Satellite_Analyzer
             try
             {
                 string url = String.Format(BASEMAP_URL, baseMapDict[(month, year)], x, y);
-                byte[] imgBytes = await FetchImageTile(url);
-                var (maskBytes, maskType) = await FetchUDM(url);
+
+                var imgTask = FetchImageTile(url);
+                var maskTask = FetchUDM(url);
+
+                await Task.WhenAll(imgTask, maskTask);
+
+                byte[] imgBytes = imgTask.Result;
+                var (maskBytes, maskType) = maskTask.Result;
 
                 return (imgBytes, maskBytes, TileIndexToEnvelope(x, y), maskType);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 return (null, null, null, 0);
             }
@@ -77,11 +88,7 @@ namespace Satellite_Analyzer
 
             try
             {
-                HttpResponseMessage response = null;
-                do 
-                { 
-                    response = await client.GetAsync(MOSAIC_URL);
-                } while (response.StatusCode != System.Net.HttpStatusCode.OK);
+                HttpResponseMessage response = await Fetch(MOSAIC_URL);
                  
                 response.EnsureSuccessStatusCode();
 
@@ -109,12 +116,37 @@ namespace Satellite_Analyzer
             }
         }
 
+        public async Task<HttpResponseMessage> Fetch(string url)
+        {
+            HttpResponseMessage response = null;
+            Random rnd = new();
+
+            for (int i = 0; i < 5; i++)
+            {
+                response = await client.GetAsync(url);
+
+                if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                {
+                    if (i < 4)
+                    {
+                        await Task.Delay(750 + rnd.Next(500));
+                        continue;
+                    }
+                    
+                    Console.WriteLine("Planet Server failed to respond after 5 attempts");
+                }
+
+                break;
+            }
+
+            return response;
+        }
+
         public async Task<byte[]> FetchImageTile(string url)
         {
-            HttpResponseMessage response = await client.GetAsync(url);
+            HttpResponseMessage response = await Fetch(url);
 
             response.EnsureSuccessStatusCode();
-
             return await response.Content.ReadAsByteArrayAsync();
         }
 
@@ -122,12 +154,12 @@ namespace Satellite_Analyzer
         {
             bool udm1 = false;
 
-            HttpResponseMessage response = await client.GetAsync(url + "&asset=ortho_udm2");
+            HttpResponseMessage response = await Fetch(url + "&asset=ortho_udm2");
 
             if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
                 udm1 = true;
-                response = await client.GetAsync(url + "&asset=ortho_udm");
+                response = await Fetch(url + "&asset=ortho_udm");
 
                 if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
                 {

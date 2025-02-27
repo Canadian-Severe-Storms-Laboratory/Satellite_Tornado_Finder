@@ -13,7 +13,6 @@ EXPORT class OnnxModel{
 	
 protected:
 	//Onnx session boiler plate
-	Ort::Env env;
 	Ort::RunOptions runOptions;
 	Ort::Session session = Ort::Session(nullptr);
 	std::array<const char*, 1> inputNames;
@@ -50,6 +49,7 @@ private:
 			Ort::ThrowOnError(ortDmlApi->SessionOptionsAppendExecutionProvider_DML(sessionOptions, /*device index*/ 0));
 		}
 		catch (Ort::Exception& e) {
+			printf("Onnx Runtime Exeception: %s\n", e.what());
 			return false;
 		}
 		
@@ -58,6 +58,8 @@ private:
 
 	void attemptToUseGPU(OrtApi const& ortApi, Ort::SessionOptions& sessionOptions) {
 		usingGPU = attemptToUseDML(ortApi, sessionOptions);
+
+		//if using cuda, rocm, etc, add here in order of priority
 	}
 
 
@@ -79,9 +81,6 @@ public:
 		OrtApi const& ortApi = Ort::GetApi();
 
 		attemptToUseGPU(ortApi, sessionOptions);
-
-		//setting a constant batch size can improve performance
-		//ortApi.AddFreeDimensionOverrideByName(sessionOptions, "batch_size", batchSize);
 
 		session = Ort::Session(env, wModelPath.c_str(), sessionOptions);
 

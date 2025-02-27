@@ -1475,34 +1475,34 @@ SWIGEXPORT void * SWIGSTDCALL CSharp_createSpan__SWIG_1(void * jarg1, int jarg2)
 }
 
 
-SWIGEXPORT int SWIGSTDCALL CSharp_getSpanSize__SWIG_0(void * jarg1) {
-  int jresult ;
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_getSpanSize__SWIG_0(void * jarg1) {
+  unsigned int jresult ;
   std::span< unsigned char > *arg1 = 0 ;
-  int result;
+  size_t result;
   
   arg1 = (std::span< unsigned char > *)jarg1;
   if (!arg1) {
     SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::span< unsigned char > & is null", 0);
     return 0;
   } 
-  result = (int)getSpanSize(*arg1);
-  jresult = result; 
+  result = getSpanSize(*arg1);
+  jresult = (unsigned int)result; 
   return jresult;
 }
 
 
-SWIGEXPORT int SWIGSTDCALL CSharp_getSpanSize__SWIG_1(void * jarg1) {
-  int jresult ;
+SWIGEXPORT unsigned int SWIGSTDCALL CSharp_getSpanSize__SWIG_1(void * jarg1) {
+  unsigned int jresult ;
   std::span< float > *arg1 = 0 ;
-  int result;
+  size_t result;
   
   arg1 = (std::span< float > *)jarg1;
   if (!arg1) {
     SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::span< float > & is null", 0);
     return 0;
   } 
-  result = (int)getSpanSize(*arg1);
-  jresult = result; 
+  result = getSpanSize(*arg1);
+  jresult = (unsigned int)result; 
   return jresult;
 }
 

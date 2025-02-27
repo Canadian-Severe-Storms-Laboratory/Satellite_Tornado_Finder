@@ -36,7 +36,7 @@
         <Button Click="RunSystematicSearch" Grid.Column="0" Content="Search" HorizontalAlignment="Left" VerticalAlignment="Top" Width="80" Margin="10,270,0,0" FontSize="14" FontWeight="Bold"/>
 
         <Label Grid.Column="0" Content="Significant Tiles" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,325,0,0" FontSize="14" FontWeight="Bold"/>
-        <ListBox x:Name="foundList" SelectionChanged="foundList_SelectionChanged" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="20,360,20,20"/>
+        <ListBox x:Name="foundList" SelectionChanged="foundList_SelectionChanged" Grid.Column="0" Margin="20,360,20,125"/>
 
         <Label Grid.Column="0" Content="Before Date" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,120,0,0" FontSize="14" FontWeight="Bold"/>
         <local:MonthYearSelection x:Name="beforeDate" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Top" Margin="20,150,20,0" Height="25"/>
@@ -58,6 +58,7 @@
         <Label x:Name="executionProviderLabel" Grid.Column="2" Content="" HorizontalAlignment="Center" Margin="0,0,0,80" VerticalAlignment="Bottom" FontSize="18" FontWeight="Bold"/>
 
         <Button x:Name="nextButton" Grid.Column="2" VerticalAlignment="Bottom" Content="Next" HorizontalAlignment="Center" Margin="0,0,0,10" Height="30" Width="100" Click="NextTile"/>
+        <Button Content="Load Save" Grid.Column="0" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,10" Height="30" Width="100" Click="LoadSaveFile"/>
 
     </Grid>
 </controls:ProWindow>

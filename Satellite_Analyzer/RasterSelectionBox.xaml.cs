@@ -85,10 +85,7 @@ namespace Satellite_Analyzer
             {
                 path = layer.GetPath().ToString();
 
-                if (path.Substring(0, 8).Equals(@"file:///"))
-                {
-                    path = path.Substring(8);
-                }
+                if (path[..8].Equals(@"file:///")) path = path[8..];
 
                 path = path.Replace("%20", " ");
 
@@ -99,7 +96,7 @@ namespace Satellite_Analyzer
                     var geoExtent = layer.GetFeatureClass().GetExtent();
                     extent = [geoExtent.XMin, geoExtent.YMax, geoExtent.XMax, geoExtent.YMin];
                 }
-                catch (Exception _) { }
+                catch (Exception) { }
 
             });
 

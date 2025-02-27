@@ -361,10 +361,10 @@ class TornadoPredictorOnnxPINVOKE {
   public static extern global::System.IntPtr createSpan__SWIG_1(global::System.Runtime.InteropServices.HandleRef jarg1, int jarg2);
 
   [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_getSpanSize__SWIG_0")]
-  public static extern int getSpanSize__SWIG_0(global::System.Runtime.InteropServices.HandleRef jarg1);
+  public static extern uint getSpanSize__SWIG_0(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_getSpanSize__SWIG_1")]
-  public static extern int getSpanSize__SWIG_1(global::System.Runtime.InteropServices.HandleRef jarg1);
+  public static extern uint getSpanSize__SWIG_1(global::System.Runtime.InteropServices.HandleRef jarg1);
 
   [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_getSpanPtr__SWIG_0")]
   public static extern global::System.IntPtr getSpanPtr__SWIG_0(global::System.Runtime.InteropServices.HandleRef jarg1);

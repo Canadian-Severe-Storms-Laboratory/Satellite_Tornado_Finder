@@ -17,11 +17,11 @@ EXPORT std::span<float> createSpan(float* spanArray, int size) {
 	return std::span<float>(spanArray, size);
 }
 
-EXPORT int getSpanSize(std::span<unsigned char>& span) {
+EXPORT size_t getSpanSize(std::span<unsigned char>& span) {
 	return span.size();
 }
 
-EXPORT int getSpanSize(std::span<float>& span) {
+EXPORT size_t getSpanSize(std::span<float>& span) {
 	return span.size();
 }
 

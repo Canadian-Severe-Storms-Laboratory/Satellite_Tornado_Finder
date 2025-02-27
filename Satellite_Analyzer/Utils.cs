@@ -25,12 +25,9 @@ namespace ArcGISUtils
             AllocConsole();
 
             var stdout = Console.OpenStandardOutput();
-            var writer = new System.IO.StreamWriter(stdout)
-            {
-                AutoFlush = true
-            };
+            var writer = new StreamWriter(stdout) { AutoFlush = true };
             Console.SetOut(writer);
-            Console.SetError(System.IO.TextWriter.Null);
+            Console.SetError(TextWriter.Null);
         }
 
         [DllImport("kernel32.dll", SetLastError = true)]
@@ -265,25 +262,23 @@ namespace ArcGISUtils
 
         public static RasterDataset OpenRasterDataset(string folder, string name)
         {
-            // Create a new raster dataset which is set to null
             RasterDataset rasterDatasetToOpen = null;
+
             try
             {
-                // Create a new file system connection path to open raster datasets using the folder path.
-                FileSystemConnectionPath connectionPath = new FileSystemConnectionPath(new System.Uri(folder), FileSystemDatastoreType.Raster);
-                // Create a new file system data store for the connection path created above.
-                FileSystemDatastore dataStore = new FileSystemDatastore(connectionPath);
-                // Open the raster dataset.
+                FileSystemConnectionPath connectionPath = new(new System.Uri(folder), FileSystemDatastoreType.Raster);
+
+                FileSystemDatastore dataStore = new(connectionPath);
+
                 rasterDatasetToOpen = dataStore.OpenDataset<RasterDataset>(name);
-                // Check if it is not null. If it is show a message box with the appropriate message.
-                if (rasterDatasetToOpen == null)
-                    System.Windows.MessageBox.Show("Failed to open raster dataset: " + name);
+
+                if (rasterDatasetToOpen == null) System.Windows.MessageBox.Show("Failed to open raster dataset: " + name);
             }
             catch (Exception exc)
             {
-                // If an exception occurs, show a message box with the appropriate message.
                 System.Windows.MessageBox.Show("Exception caught in OpenRasterDataset for raster: " + name + exc.Message);
             }
+
             return rasterDatasetToOpen;
         }
 

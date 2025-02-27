@@ -20,14 +20,14 @@ public class TornadoPredictorOnnx {
     return ret;
   }
 
-  public static int getSpanSize(SWIGTYPE_p_std__spanT_unsigned_char_t span) {
-    int ret = TornadoPredictorOnnxPINVOKE.getSpanSize__SWIG_0(SWIGTYPE_p_std__spanT_unsigned_char_t.getCPtr(span));
+  public static uint getSpanSize(SWIGTYPE_p_std__spanT_unsigned_char_t span) {
+    uint ret = TornadoPredictorOnnxPINVOKE.getSpanSize__SWIG_0(SWIGTYPE_p_std__spanT_unsigned_char_t.getCPtr(span));
     if (TornadoPredictorOnnxPINVOKE.SWIGPendingException.Pending) throw TornadoPredictorOnnxPINVOKE.SWIGPendingException.Retrieve();
     return ret;
   }
 
-  public static int getSpanSize(SWIGTYPE_p_std__spanT_float_t span) {
-    int ret = TornadoPredictorOnnxPINVOKE.getSpanSize__SWIG_1(SWIGTYPE_p_std__spanT_float_t.getCPtr(span));
+  public static uint getSpanSize(SWIGTYPE_p_std__spanT_float_t span) {
+    uint ret = TornadoPredictorOnnxPINVOKE.getSpanSize__SWIG_1(SWIGTYPE_p_std__spanT_float_t.getCPtr(span));
     if (TornadoPredictorOnnxPINVOKE.SWIGPendingException.Pending) throw TornadoPredictorOnnxPINVOKE.SWIGPendingException.Retrieve();
     return ret;
   }

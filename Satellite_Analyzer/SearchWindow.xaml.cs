@@ -1,6 +1,8 @@
 ﻿using ArcGIS.Desktop.Framework.Threading.Tasks;
 using ArcGIS.Desktop.Internal.Mapping;
 using ArcGIS.Desktop.Mapping;
+using Microsoft.Win32;
+using Newtonsoft.Json;
 using OpenCvSharp;
 using OpenCvSharp.Extensions;
 using ScottPlot;
@@ -51,7 +53,7 @@ namespace Satellite_Analyzer
             mainPlot.Plot.Axes.AutoScale();
         }
 
-        private async void WindowLoaded(object sender, RoutedEventArgs e)
+        private void WindowLoaded(object sender, RoutedEventArgs e)
         {
             loadingLabel.Visibility = Visibility.Visible;
 
@@ -192,7 +194,7 @@ namespace Satellite_Analyzer
 
             var results = await SystematicSearch.Search(polygons[0], bMonth, bYear, aMonth, aYear);
 
-            results = [.. results.OrderByDescending(result => result.pixelCount)];
+            //results = [.. results.OrderByDescending(result => result.pixelCount)];
 
             foundList.Items.Clear();
 
@@ -200,12 +202,39 @@ namespace Satellite_Analyzer
 
             savePath = SystematicSearch.GetSavePath();
 
-            resultLayers = FindResultLayers(results);
+            resultLayers = await FindResultLayers(results);
 
             foundList.SelectedIndex = 0;
         }
 
-        private List<RasterLayer> FindResultLayers(List<SearchResult> results)
+        private async void LoadSaveFile(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog openFileDialog = new()
+            {
+                Filter = "json files (*.json)|*.json|All files (*.*)|*.*"
+            };
+
+            if (openFileDialog.ShowDialog() == false) return;
+            
+            string filePath = openFileDialog.FileName;
+
+            string jsonString = File.ReadAllText(filePath);
+
+            dynamic jsonSaveData = JsonConvert.DeserializeObject(jsonString);
+
+            savePath = jsonSaveData.folderPath;
+            List<SearchResult> results = jsonSaveData.tiles.ToObject<List<SearchResult>>();
+
+            foundList.Items.Clear();
+
+            foreach (var result in results) foundList.Items.Add(result);
+
+            resultLayers = await FindResultLayers(results);
+
+            foundList.SelectedIndex = 0;
+        }
+
+        private async Task<List<RasterLayer>> FindResultLayers(List<SearchResult> results)
         {
             List<RasterLayer> layers = [];
 
@@ -232,9 +261,8 @@ namespace Satellite_Analyzer
                 if (!found)
                 {
                     try
-                    {
-                        LoadRasterLayer(savePath, "diff" + imgName);
-                        RasterLayer rl = LoadRasterLayer(savePath, "pred" + imgName);
+                    {             
+                        RasterLayer rl = await QueuedTask.Run(() => { LoadRasterLayer(savePath, "diff" + imgName); return LoadRasterLayer(savePath, "pred" + imgName); });
                         layers.Add(rl);
                     }
                     catch

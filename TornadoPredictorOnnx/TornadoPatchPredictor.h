@@ -11,9 +11,9 @@ private:
 	static constexpr size_t inputSize = inputWidth * inputHeight * inputChannels;
 	static constexpr size_t predicitionSize = 1;
 	static constexpr size_t stride = 16;
-	static constexpr float norm = 1.0 / 255.0;
-	static constexpr std::array<float, 6> normMean = { 16.68440278, 38.07405572, 27.43923875, 22.9263001, 47.33313112, 42.46188265 };
-	static constexpr std::array<float, 6> normStd_1 = { 1.0 / 17.76991678, 1.0 / 18.96145942, 1.0 / 21.60122086, 1.0 / 15.70177085, 1.0 / 17.90887029, 1.0 / 23.60007328 };
+	static constexpr float norm = (float)(1.0 / 255.0);
+	static constexpr std::array<float, 6> normMean = { 16.68440278f, 38.07405572f, 27.43923875f, 22.9263001f, 47.33313112f, 42.46188265f };
+	static constexpr std::array<float, 6> normStd_1 = { 0.056274883f, 0.052738555f, 0.04629368f, 0.063687086f, 0.05583825f, 0.04237275f };
 
 public:
 
@@ -28,14 +28,14 @@ public:
 	std::vector<unsigned char> analyze(std::vector<unsigned char>& before, std::vector<unsigned char>& after, int width, int height) {
 
 		std::vector<float> predictions;
-		predictions.reserve(ceil((width / stride)) * ceil((height / stride)));
+		predictions.reserve((size_t)(ceil((width / stride)) * ceil((height / stride))));
 
 		auto addPatchToBuffer = [&](int y, int x, size_t& inputIdx) {
 			for (int i = y; i < y + 32; i++) {
 				for (int j = x; j < x + 32; j++) {
 					const size_t imgIdx = 3 * (i * (size_t)width + j);
 
-					inputBuffer[inputIdx] = ((float)before[imgIdx] - normMean[0]) * normStd_1[0];
+					inputBuffer[inputIdx]     = ((float)before[imgIdx]     - normMean[0]) * normStd_1[0];
 					inputBuffer[inputIdx + 1] = ((float)before[imgIdx + 1] - normMean[1]) * normStd_1[1];
 					inputBuffer[inputIdx + 2] = ((float)before[imgIdx + 2] - normMean[2]) * normStd_1[2];
 

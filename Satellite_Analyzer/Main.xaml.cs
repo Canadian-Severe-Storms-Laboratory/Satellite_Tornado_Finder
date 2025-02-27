@@ -304,9 +304,9 @@ namespace Satellite_Analyzer
         List<ScottPlot.Plottables.Rectangle> rects = new();
         List<ScottPlot.Plottables.Rectangle> otherRects = new();
 
-        private void AddMarker(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        private void AddMarker(object sender, MouseButtonEventArgs e)
         {
-            if (e.RightButton == System.Windows.Input.MouseButtonState.Pressed)
+            if (e.RightButton == MouseButtonState.Pressed)
             {
                 var plt = mainPlot.Plot;
                 var position = e.GetPosition(mainPlot);
