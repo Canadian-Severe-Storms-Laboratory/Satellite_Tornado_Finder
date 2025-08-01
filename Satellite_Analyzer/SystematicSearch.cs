@@ -1,5 +1,4 @@
 ﻿using ArcGIS.Core.CIM;
-using ArcGIS.Core.Data.Raster;
 using ArcGIS.Core.Geometry;
 using ArcGIS.Desktop.Framework.Threading.Tasks;
 using ArcGIS.Desktop.Mapping;
@@ -10,20 +9,21 @@ using System.IO;
 using System.Threading.Tasks;
 using static ArcGISUtils.Utils;
 using System.Threading.Tasks.Dataflow;
-using System.Runtime.InteropServices;
 using System.Collections.Concurrent;
 using System.Linq;
 using Newtonsoft.Json;
+using BitMiracle.LibTiff.Classic;
+
 
 namespace Satellite_Analyzer
 {
-    public struct SearchResult(int x, int y, int pc)
+    public struct SearchResult(int x, int y, int s)
     {
-        public int tileX = x, tileY = y, pixelCount = pc;
+        public int tileX = x, tileY = y, score = s;
 
         public override readonly string ToString()
         {
-            return string.Format("{0}, {1} - {2}", tileX, tileY, pixelCount);
+            return string.Format("{0}, {1} - {2}", tileX, tileY, score);
         }
     }
 
@@ -34,7 +34,7 @@ namespace Satellite_Analyzer
             string path = GetProjectPath() + "\\SatelliteAnalysis";
             if (!Directory.Exists(path)) Directory.CreateDirectory(path);
 
-            string dateTime = System.DateTime.Now.ToString("yyyy_MM_dd_HH_mm_ss");
+            string dateTime = DateTime.Now.ToString("yyyy_MM_dd_HH_mm_ss");
 
             path += "\\Results_" + dateTime;
 
@@ -51,10 +51,10 @@ namespace Satellite_Analyzer
         private static PlanetReader planetReader;
         private static TornadoPatchPredictor tpp;
         private static List<(int, int)> tiles;
-        private static ConcurrentBag<SearchResult> significantTiles;
+        private static List<SearchResult> foundTiles;
         private static string savePath;
         private static GroupLayer predGroup;
-        private static GroupLayer diffGroup;
+        //private static GroupLayer diffGroup;
         private static Monitor monitor;
 
         private static async Task InitalizeSearch(Polygon polygon)
@@ -68,195 +68,237 @@ namespace Satellite_Analyzer
 
             tiles = PolygonToTiles(polygon);
 
-            significantTiles = [];
+            foundTiles = [];
 
             tpp = new(AddinAssemblyLocation() + "\\tornado_patch_predictor_de_norm.onnx");
 
             savePath = CreateResultsFolder();
 
             predGroup = await QueuedTask.Run(() => { return LayerFactory.Instance.CreateGroupLayer(MapView.Active.Map, 0, "Tornado_Prediction"); });
-            diffGroup = await QueuedTask.Run(() => { return LayerFactory.Instance.CreateGroupLayer(MapView.Active.Map, 0, "Differnce_Images"); });
+            //diffGroup = await QueuedTask.Run(() => { return LayerFactory.Instance.CreateGroupLayer(MapView.Active.Map, 0, "Differnce_Images"); });
 
             monitor = new("Search Progress", tiles.Count);
         }
 
         public static async Task<List<SearchResult>> Search(Polygon polygon, int bMonth, int bYear, int aMonth, int aYear)
         {
+            CIMColorRamp aspectRamp = await QueuedTask.Run(() =>
+            {
+                StyleProjectItem style = ArcGIS.Desktop.Core.Project.Current.GetItems<StyleProjectItem>().FirstOrDefault(s => s.Name.Equals("ArcGIS Colors", StringComparison.OrdinalIgnoreCase));
+                ColorRampStyleItem aspectItem = style?.SearchColorRamps("Aspect").FirstOrDefault();
+                return aspectItem.ColorRamp;
+            });
+
             await InitalizeSearch(polygon);
+
+            ConcurrentBag<SearchResult> significantTiles = [];
 
             monitor.Start();
 
             var downloadBlock = new TransformBlock<(int, int), (int, int, byte[], byte[], int, Envelope, byte[], byte[], int)>(async (tile) =>
             {
-                if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, 0, null, null, null, 0);
+                try
+                {
+                    if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, 0, null, null, null, 0);
 
-                var watch = System.Diagnostics.Stopwatch.StartNew();
-                var (x, y) = tile;
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
+                    var (x, y) = tile;
 
-                string imgName = $"_{x}_{y}.png";
-                string beforePath = savePath + "\\before" + imgName;
-                string afterPath = savePath + "\\after" + imgName;
+                    string imgName = $"_{x}_{y}.png";
+                    string beforePath = savePath + "\\before" + imgName;
+                    string afterPath = savePath + "\\after" + imgName;
 
-                var (beforeBytes, beforeUDMBytes, envelope, beforeMaskType) = await planetReader.FindImage(x, y, bMonth, bYear, beforePath);
-                if (beforeBytes == null) return (x, y, null, null, 0, null, null, null, 0);
+                    var (beforeBytes, beforeUDMBytes, envelope, beforeMaskType) = await planetReader.FindImage(x, y, bMonth, bYear, beforePath);
+                    if (beforeBytes == null) return (x, y, null, null, 0, null, null, null, 0);
 
-                var (afterBytes, afterUDMBytes, _, afterMaskType) = await planetReader.FindImage(x, y, aMonth, aYear, afterPath);
-                if (afterBytes == null) return (x, y, null, null, 0, null, null, null, 0);
+                    var (afterBytes, afterUDMBytes, _, afterMaskType) = await planetReader.FindImage(x, y, aMonth, aYear, afterPath);
+                    if (afterBytes == null) return (x, y, null, null, 0, null, null, null, 0);
 
-                watch.Stop();
-                Console.WriteLine($"Tile {x}, {y} downloaded in {watch.ElapsedMilliseconds} ms");
+                    watch.Stop();
+                    Console.WriteLine($"Tile {x}, {y} downloaded in {watch.ElapsedMilliseconds} ms");
 
-                return (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType);
+                    return (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType);
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show("Error in Download Block:\n\n" + ex.Message);
+                }
+
+                return (tile.Item1, tile.Item2, null, null, 0, null, null, null, 0);
+            },
+            new ExecutionDataflowBlockOptions
+            {
+                BoundedCapacity = 4,
+                EnsureOrdered = false
             });
 
             var preprocessBlock = new TransformBlock<(int, int, byte[], byte[], int, Envelope, byte[], byte[], int), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[])>((packet) =>
             {
-                var watch = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                var (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType) = packet;
+                    var (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType) = packet;
 
-                if (monitor.cancelled || beforeBytes == null || afterBytes == null) return (x, y, null, null, null, null, null, null, null);
+                    if (monitor.cancelled || beforeBytes == null || afterBytes == null) return (x, y, null, null, null, null, null, null, null);
 
-                Mat beforeImg = Cv2.ImDecode(beforeBytes, ImreadModes.Color);
-                Mat beforeCCImg = PlanetReader.DecodeUDM(beforeUDMBytes, beforeMaskType);
-                Mat afterImg = Cv2.ImDecode(afterBytes, ImreadModes.Color);
-                Mat afterCCImg = PlanetReader.DecodeUDM(afterUDMBytes, afterMaskType);
+                    Mat beforeImg = Cv2.ImDecode(beforeBytes, ImreadModes.Color);
+                    Mat beforeCCImg = PlanetReader.DecodeUDM(beforeUDMBytes, beforeMaskType);
+                    Mat afterImg = Cv2.ImDecode(afterBytes, ImreadModes.Color);
+                    Mat afterCCImg = PlanetReader.DecodeUDM(afterUDMBytes, afterMaskType);
 
-                Cv2.MedianBlur(beforeImg, beforeImg, 5);
-                Cv2.MedianBlur(afterImg, afterImg, 5);
+                    Cv2.MedianBlur(beforeImg, beforeImg, 5);
+                    Cv2.MedianBlur(afterImg, afterImg, 5);
 
-                watch.Stop();
-                Console.WriteLine($"Tile {x}, {y} preprocessed in {watch.ElapsedMilliseconds} ms");
+                    watch.Stop();
+                    Console.WriteLine($"Tile {x}, {y} preprocessed in {watch.ElapsedMilliseconds} ms");
 
-                return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes);
+                    return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes);
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show("Error in Pre Processing Block:\n\n" + ex.Message);
+                }
+
+                return (packet.Item1, packet.Item2, null, null, null, null, null, null, null);
+            },
+            new ExecutionDataflowBlockOptions
+            {
+                BoundedCapacity = 4,
+                EnsureOrdered = false
             });
 
             var predictionBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[]), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector)>((packet) =>
             {
-                var watch = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes) = packet;
+                    var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes) = packet;
 
-                if (monitor.cancelled || beforeImg == null || afterImg == null) return (x, y, null, null, null, null, null, null, null, null);
+                    if (monitor.cancelled || beforeImg == null || afterImg == null) return (x, y, null, null, null, null, null, null, null, null);
 
-                ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
+                    ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
 
-                watch.Stop();
-                Console.WriteLine($"Tile {x}, {y} predicted in {watch.ElapsedMilliseconds} ms");
+                    watch.Stop();
+                    Console.WriteLine($"Tile {x}, {y} predicted in {watch.ElapsedMilliseconds} ms");
 
-                return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction);
-
-            });
-
-            var postProcessBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector), (int, int, int, Mat, Mat, byte[], byte[])> (async (packet) =>
-            {
-                if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, null, null, null, null);
-                var watch = System.Diagnostics.Stopwatch.StartNew();
-
-                var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction) = packet;
-
-                if (beforeImg == null || afterImg == null) return (x, y, 0, null, null, null, null);
-
-                Mat predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
-
-                Mat landcoverImg = await LandCoverMask(envelope, beforeImg.Size());
-
-                Mat mask = new();
-                Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
-                Cv2.BitwiseAnd(mask, beforeCCImg, mask);
-
-                Mat diffImg = AbsDifferenceImage(beforeImg, afterImg);
-                Cv2.BitwiseAnd(mask, diffImg, diffImg);
-
-                Cv2.CvtColor(mask, mask, ColorConversionCodes.BGR2GRAY);
-
-                Cv2.BitwiseAnd(predImg, mask, predImg);
-                Cv2.MorphologyEx(predImg, predImg, MorphTypes.Open, Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(25, 25)));
-
-                int pxCount = Cv2.CountNonZero(predImg);
-
-                watch.Stop();
-                Console.WriteLine($"Tile {x}, {y} post processed in {watch.ElapsedMilliseconds} ms");
-
-                return (x, y, pxCount, predImg, diffImg, beforeBytes, afterBytes);
-            });
-
-            var saveBlock = new ActionBlock<(int, int, int, Mat, Mat, byte[], byte[])>(async (packet) =>
-            {
-                if (monitor.cancelled) return;
-
-                var (x, y, pxCount, predImg, diffImg, beforeBytes, afterBytes) = packet;
-
-                string imgName = $"_{x}_{y}.png";
-
-                if (pxCount < 2000)
-                { 
-                    Console.WriteLine($"Tile {x}, {y} skipped");
-                    monitor.Update();
-                    return;
+                    return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction);
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.MessageBox.Show("Error in Prediction Block:\n\n" + ex.Message);
                 }
 
-                var watch = System.Diagnostics.Stopwatch.StartNew();
+                return (packet.Item1, packet.Item2, null, null, null, null, null, null, null, null);
+            }, 
+            new ExecutionDataflowBlockOptions
+            {
+                BoundedCapacity = 1,
+                EnsureOrdered = false
+            });
 
-                await File.WriteAllBytesAsync(savePath + "\\before" + imgName, beforeBytes);
-                await File.WriteAllBytesAsync(savePath + "\\after" + imgName, afterBytes);
+            var postProcessBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector), (int, int, int, Mat, Mat, Mat, Mat, byte[])> (async (packet) =>
+            {
+                try 
+                { 
+                    if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, null, null, null, null, null);
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                significantTiles.Add(new(x, y, pxCount));
+                    var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction) = packet;
 
-                Mat diffMask = new();
-                Cv2.InRange(diffImg, new Scalar(1, 1, 1), new Scalar(255, 255, 255), diffMask);
+                    if (beforeImg == null || afterImg == null) return (x, y, 0, null, null, null, null, null);
 
-                Mat[] diffchannels = Cv2.Split(diffImg);
+                    Mat predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
 
-                Cv2.Merge([diffchannels[2], diffchannels[1], diffchannels[0], diffMask], diffImg);
+                    Mat landcoverImg = await LandCoverMask(envelope, beforeImg.Size());
 
-                await QueuedTask.Run(() =>
-                {
-                    var rd = DuplicateRasterDataset(savePath, "before" + imgName, savePath, $"pred_{x}_{y}.tif");
-                    File.Copy(savePath + $"\\pred_{x}_{y}.tif", savePath + $"\\diff_{x}_{y}.tif", true);
+                    Mat mask = new();
+                    Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
+                    Cv2.BitwiseAnd(mask, beforeCCImg, mask);
 
-                    Raster raster = rd.CreateFullRaster();
+                    Mat diffImg = AbsDifferenceImage(beforeImg, afterImg);
+                    Cv2.BitwiseAnd(mask, diffImg, diffImg);
 
-                    WriteByteRaster(predImg, raster, channels: 4);
+                    Cv2.CvtColor(mask, mask, ColorConversionCodes.BGR2GRAY);
 
-                    var layer = LoadRasterLayer(savePath, $"pred_{x}_{y}.tif", predGroup);
+                    Cv2.BitwiseAnd(predImg, mask, predImg);
+                    Cv2.MorphologyEx(predImg, predImg, MorphTypes.Open, Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(15, 15)));
+                    Cv2.MinMaxLoc(predImg, out double _, out double maxVal);
+                    Cv2.Threshold(predImg, predImg, 127, 255, ThresholdTypes.Binary);
 
-                    CIMRasterRGBColorizer colorizer = new()
-                    {
-                        AlphaBandIndex = 3,
-                        StretchType = RasterStretchType.MinimumMaximum,
-                        UseAlphaBand = true,
-                        UseGreenBand = false,
-                        UseBlueBand = false
-                    };
+                    //int pxCount = Cv2.CountNonZero(predImg);
 
-                    layer.SetColorizer(colorizer);
+                    watch.Stop();
+                    Console.WriteLine($"Tile {x}, {y} post processed in {watch.ElapsedMilliseconds} ms");
 
-                    //rd = DuplicateRasterDataset(savePath, "before" + imgName, savePath, $"diff_{x}_{y}.tif");
-                    rd = OpenRasterDataset(savePath, $"diff_{x}_{y}.tif");
-                    raster = rd.CreateFullRaster();
+                    return (x, y, (int)maxVal, predImg, diffImg, beforeImg, afterImg, afterBytes);
+                }
+                catch (Exception ex) {
+                    System.Windows.MessageBox.Show( "Error in Post Processing Block:\n\n" + ex.Message );
+                }
 
-                    WriteRaster<byte>(diffImg, raster);
-
-                    layer = LoadRasterLayer(savePath, $"diff_{x}_{y}.tif", diffGroup);
-
-                    colorizer = new()
-                    {
-                        AlphaBandIndex = 3,
-                        StretchType = RasterStretchType.MinimumMaximum,
-                        UseAlphaBand = true,
-                    };
-
-                    layer.SetColorizer(colorizer);
-                });
-
-                monitor.Update();
-                watch.Stop();
-                Console.WriteLine($"Tile {x}, {y} saved in {watch.ElapsedMilliseconds} ms");
+                return (packet.Item1, packet.Item2, 0, null, null, null, null, null);
             },
             new ExecutionDataflowBlockOptions
             {
-                MaxDegreeOfParallelism = 4
+                BoundedCapacity = 4,
+                EnsureOrdered = false
+            });
+
+            var saveBlock = new ActionBlock<(int, int, int, Mat, Mat, Mat, Mat, byte[])>(async (packet) =>
+            {
+                try
+                {
+                    if (monitor.cancelled) return;
+
+                    var (x, y, maxVal, predImg, diffImg, beforeImg, afterImg, afterBytes) = packet;
+
+                    string imgName = $"_{x}_{y}.png";
+
+                    if (maxVal < 128)
+                    {
+                        Console.WriteLine($"Tile {x}, {y} skipped");
+                        monitor.Update();
+                        return;
+                    }
+
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
+
+                    Cv2.ImWrite(savePath + "\\before" + imgName, beforeImg);
+                    Cv2.ImWrite(savePath + "\\after" + imgName, afterImg);
+                    Cv2.ImWrite(savePath + "\\diff" + imgName, diffImg);
+
+                    Tiff pred = GeoTiff.CreateFromReference(afterBytes, savePath + $"\\pred_{x}_{y}.tif");
+                    GeoTiff.WriteImage(pred, predImg);
+
+                    significantTiles.Add(new(x, y, maxVal));
+
+                    await QueuedTask.Run(() =>
+                    {
+                        var layer = LoadRasterLayer(savePath, $"pred_{x}_{y}.tif", predGroup);
+
+                        var c = layer.GetColorizer();
+
+                        CIMRasterStretchColorizer colorizor = (CIMRasterStretchColorizer)layer.GetColorizer();
+                        colorizor.StretchType = RasterStretchType.MinimumMaximum;
+                        colorizor.DisplayBackgroundValue = true;
+                        colorizor.ColorRamp = aspectRamp;
+                        layer.SetColorizer(colorizor);
+                    });
+
+                    monitor.Update();
+                    watch.Stop();
+                    Console.WriteLine($"Tile {x}, {y} saved in {watch.ElapsedMilliseconds} ms");
+                }
+                catch (Exception ex) {
+                    System.Windows.MessageBox.Show( "Error in Save Block:\n\n" + ex.Message );
+                }
+            },
+            new ExecutionDataflowBlockOptions
+            {
+                BoundedCapacity = 4,
+                EnsureOrdered = false
             });
 
             downloadBlock.LinkTo(preprocessBlock, new DataflowLinkOptions() { PropagateCompletion = true });
@@ -264,17 +306,27 @@ namespace Satellite_Analyzer
             predictionBlock.LinkTo(postProcessBlock, new DataflowLinkOptions() { PropagateCompletion = true });
             postProcessBlock.LinkTo(saveBlock, new DataflowLinkOptions() { PropagateCompletion = true });
 
-            foreach (var tile in tiles) await downloadBlock.SendAsync(tile);
+            try
+            {
+                foreach (var tile in tiles) await downloadBlock.SendAsync(tile);
 
-            downloadBlock.Complete();
+                downloadBlock.Complete();
 
-            await saveBlock.Completion;
+                await saveBlock.Completion;
 
-            monitor.Stop();
+                monitor.Stop();
 
-            SaveSearchResults();
+                foundTiles = [.. significantTiles.OrderByDescending(x => x.score)]; //[.. significantTiles.OrderBy(x => x.tileY).ThenBy(x => x.tileX)];
 
-            return [.. significantTiles];
+                SaveSearchResults();
+            }
+            catch (Exception ex) {
+                System.Windows.MessageBox.Show("Error in Search:\n\n" + ex.Message);
+            }
+
+            Console.WriteLine($"found {significantTiles.Count} of {tiles.Count}");
+
+            return [.. foundTiles];
         }
 
         private static void SaveSearchResults()
@@ -284,7 +336,7 @@ namespace Satellite_Analyzer
             Dictionary<string, object> results = new()
             {
                 { "folderPath", savePath },
-                { "tiles", significantTiles }
+                { "tiles", foundTiles }
             };
 
             using StreamWriter sw = new(path);

@@ -29,7 +29,10 @@ namespace Satellite_Analyzer
 
         private List<ImageRect> imgPlottables;
         private List<ImageRect> nextImgPlottables;
+        private List<Coordinates[]> predContours;
+        private List<Coordinates[]> nextPredContours;
         private int lastResultIndex = 0;
+        private bool highlightPred = true;
 
         public SearchWindow()
         {
@@ -46,6 +49,8 @@ namespace Satellite_Analyzer
             var imRect = imgPlottables[imageList.SelectedIndex];
 
             plt.PlottableList.Add(imRect);
+
+            if (highlightPred) PlotContours(plt);
 
             loadingLabel.Visibility = Visibility.Hidden;
 
@@ -106,7 +111,9 @@ namespace Satellite_Analyzer
                     break;
 
                 case Key.Up:
-                    imageList.SelectedIndex = 3;
+                    //imageList.SelectedIndex = 3;
+                    highlightPred = !highlightPred;
+                    UpdatePlot();
                     break;
 
                 case Key.Left:
@@ -115,6 +122,10 @@ namespace Satellite_Analyzer
 
                 case Key.Right:
                     imageList.SelectedIndex = 1;
+                    break;
+
+                case Key.Enter:
+                    NextTile(null, null);
                     break;
 
                 case Key.Z:
@@ -150,12 +161,14 @@ namespace Satellite_Analyzer
 
             if (lastResultIndex + 1 == foundList.SelectedIndex)
             {
+                predContours = nextPredContours;
                 imgPlottables = nextImgPlottables;
             }
             else
             {
                 SearchResult r = (SearchResult)foundList.SelectedItem;
                 await QueuedTask.Run(() => imgPlottables = LoadTileImages(r));
+                predContours = LoadPredContours(r);
             }
 
             lastResultIndex = foundList.SelectedIndex;
@@ -169,6 +182,7 @@ namespace Satellite_Analyzer
                 MapView.Active.ZoomToAsync(resultLayers[lastResultIndex]);
 
                 nextImgPlottables = LoadTileImages(result);
+                nextPredContours = LoadPredContours(result);
 
                 foundList.Dispatcher.Invoke(() => foundList.IsEnabled = true);
                 nextButton.Dispatcher.Invoke(() => nextButton.IsEnabled = true);
@@ -189,6 +203,12 @@ namespace Satellite_Analyzer
             }
 
             FeatureLayer polygonLayer = PolygonSelection.GetSelectedLayer();
+
+            if (polygonLayer == null)
+            {
+                MessageBox.Show("Select a polygon search area");
+                return;
+            }
 
             var polygons = await QueuedTask.Run(() => ReadShapes<ArcGIS.Core.Geometry.Polygon>(polygonLayer));
 
@@ -258,19 +278,18 @@ namespace Satellite_Analyzer
                     }
                 }
 
-                if (!found)
-                {
-                    try
-                    {             
-                        RasterLayer rl = await QueuedTask.Run(() => { LoadRasterLayer(savePath, "diff" + imgName); return LoadRasterLayer(savePath, "pred" + imgName); });
-                        layers.Add(rl);
-                    }
-                    catch
-                    {
-                        layers.Add(null);
-                        failed = true;
-                    }
+                if (found) continue;
+                
+                try
+                {             
+                    RasterLayer rl = await QueuedTask.Run(() => { return LoadRasterLayer(savePath, "pred" + imgName); }); //LoadRasterLayer(savePath, "diff" + imgName); 
+                    layers.Add(rl);
                 }
+                catch
+                {
+                    layers.Add(null);
+                    failed = true;
+                }  
             }
 
             if (failed) MessageBox.Show("Some layers failed to load");
@@ -278,33 +297,70 @@ namespace Satellite_Analyzer
             return layers;
         }
 
+        private void PlotContours(Plot plt)
+        {
+            foreach (var contour in predContours)
+            {
+                var poly = plt.Add.Polygon(contour);
+                poly.FillColor = ScottPlot.Colors.Red.WithAlpha(0.2);
+                poly.LineColor = ScottPlot.Colors.Red;
+                poly.LineStyle.Pattern = LinePattern.Solid;
+            }
+        }
+
+        private List<Coordinates[]> LoadPredContours(SearchResult result)
+        {
+            string imgName = $"_{result.tileX}_{result.tileY}";
+            Mat pred = Cv2.ImRead(savePath + "\\pred" + imgName + ".tif", ImreadModes.Grayscale);
+            Cv2.Dilate(pred, pred, Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(5, 5)));
+
+            List<Coordinates[]> polys = [];
+
+            var contours = Cv2.FindContoursAsArray(pred, RetrievalModes.External, ContourApproximationModes.ApproxNone);
+
+            foreach (var contour in contours)
+            {
+                Coordinates[] poly = new Coordinates[contour.Length];
+
+                for (int i = 0; i < contour.Length; i++)
+                {
+                    poly[i] = new Coordinates(contour[i].X, pred.Height - contour[i].Y);
+                }
+
+                polys.Add(poly);
+            }
+
+            return polys;
+        }
+
         private List<ImageRect> LoadTileImages(SearchResult result)
         {
             string imgName = $"_{result.tileX}_{result.tileY}";
 
-            List<ImageRect> imageRects = [
-                LoadImageRect(savePath + "\\before" + imgName + ".png"),
-                LoadImageRect(savePath + "\\after" + imgName + ".png"),
-                LoadImageRect(savePath + "\\diff" + imgName + ".tif"),
-                LoadImageRect(savePath + "\\pred" + imgName + ".tif"),
+            Mat before = Cv2.ImRead(savePath + "\\before" + imgName + ".png");
+            Mat after = Cv2.ImRead(savePath + "\\after" + imgName + ".png");
+            Mat diff = Cv2.ImRead(savePath + "\\diff" + imgName + ".png");
+            Mat pred = Cv2.ImRead(savePath + "\\pred" + imgName + ".tif");
+
+            List <ImageRect> imageRects = [
+                MatToImageRect(before),
+                MatToImageRect(after),
+                MatToImageRect(diff),
+                MatToImageRect(pred)
             ];
 
             return imageRects;
         }
 
-        private ImageRect LoadImageRect(string filePath)
+        private ImageRect MatToImageRect(Mat image)
         {
-            Mat image = Cv2.ImRead(filePath);
             Cv2.CvtColor(image, image, ColorConversionCodes.BGR2RGBA);
 
             SKBitmap bmp = new();
             SKImageInfo info = new(image.Width, image.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
             bool succeeded = bmp.InstallPixels(info, image.Data, info.RowBytes);
 
-            if (!succeeded)
-            {
-                return new ImageRect();
-            }
+            if (!succeeded) return new ImageRect();
 
             return new ImageRect
             {

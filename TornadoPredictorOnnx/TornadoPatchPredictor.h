@@ -93,7 +93,8 @@ public:
 		}
 
 		for (int i = 0; i < height * width; i++) {
-			mask[i] = (predMask[i] / (float)mask[i]) < 0.7f ? 0 : 255;
+			//mask[i] = (predMask[i] / (float)mask[i]) < 0.5f ? 0 : 255;
+			mask[i] = (unsigned char) round(255.0f * predMask[i] / (float)mask[i]);
 		}
 
 		return mask;

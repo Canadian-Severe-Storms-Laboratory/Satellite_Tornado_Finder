@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.props" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" />
-  <Import Project="..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.props" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.props')" />
+  <Import Project="..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" />
+  <Import Project="..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props')" />
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
       <Configuration>Debug</Configuration>
@@ -73,10 +73,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>C:\Users\danie\Documents\Experiments\Satellite\Satellite_Analyzer\bin\Debug\net8.0-windows\</OutDir>
+    <OutDir>C:\Users\danie\Documents\Experiments\Satellite\Satellite_Tornado_Finder\Satellite_Analyzer\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>C:\Users\danie\Documents\Experiments\Satellite\Satellite_Analyzer\bin\Debug\net8.0-windows\</OutDir>
+    <OutDir>C:\Users\danie\Documents\Experiments\Satellite\Satellite_Tornado_Finder\Satellite_Analyzer\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -168,7 +168,6 @@
     </PreBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Source.cpp" />
     <ClCompile Include="swig_wrap.cxx" />
   </ItemGroup>
   <ItemGroup>
@@ -190,16 +189,16 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.targets" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.targets')" />
-    <Import Project="..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" />
+    <Import Project="..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets')" />
+    <Import Project="..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets" Condition="Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.props'))" />
-    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.13.1\build\Microsoft.AI.DirectML.targets'))" />
-    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.props'))" />
-    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.17.3\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets'))" />
+    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.props'))" />
+    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.AI.DirectML.1.15.4\build\Microsoft.AI.DirectML.targets'))" />
+    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.props'))" />
+    <Error Condition="!Exists('..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\Satellite_Analyzer\packages\Microsoft.ML.OnnxRuntime.DirectML.1.22.0\build\native\Microsoft.ML.OnnxRuntime.DirectML.targets'))" />
   </Target>
 </Project>

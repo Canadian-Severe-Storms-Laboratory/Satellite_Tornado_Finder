@@ -293,7 +293,7 @@ namespace ArcGISUtils
 
             RasterStorageDef rasterStorageDef = new();
             rasterStorageDef.SetPyramidLevel(0);
-            //rasterStorageDef.SetCompressionType(RasterCompressionType.LZ77);
+            rasterStorageDef.SetCompressionType(RasterCompressionType.LZW);
 
             inRaster.SaveAs(outputName, outputFileSytemDataStore, "TIFF", rasterStorageDef);
 

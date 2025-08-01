@@ -59,8 +59,8 @@
             <ListBoxItem Content="Prediction" Height="50"/>
         </ListBox>
 
-        <Label x:Name="executionProviderLabel" Grid.Column="2" Content="" HorizontalAlignment="Center" Margin="0,0,0,80" VerticalAlignment="Bottom" FontSize="18" FontWeight="Bold"/>
-
+        <Label x:Name="executionProviderLabel" Grid.Column="2" Content="" HorizontalAlignment="Center" Margin="0,0,0,90" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
+        <Label x:Name="scoreLabel" Grid.Column="2" Content="" HorizontalAlignment="Center" Margin="0,0,0,50" VerticalAlignment="Bottom" FontSize="14" FontWeight="Bold"/>
     </Grid>
 
 

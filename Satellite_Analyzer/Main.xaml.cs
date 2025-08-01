@@ -18,6 +18,10 @@ using ArcGIS.Desktop.Internal.Mapping;
 using System.Windows.Media;
 using OpenTK.Windowing.Common.Input;
 using ArcGIS.Desktop.Internal.Mapping.Locate;
+using System.Numerics;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Formats.Asn1;
 
 namespace Satellite_Analyzer
 {
@@ -55,7 +59,8 @@ namespace Satellite_Analyzer
         private void LoadSavedEvents()
         {
             //update to relative path...
-            var filePath = AddinAssemblyLocation() + "\\forest_tornadoes_modified.csv";
+            //var filePath = AddinAssemblyLocation() + "\\forest_tornadoes_modified.csv";
+            var filePath = AddinAssemblyLocation() + "\\forest_tornadoes_eu.csv";
 
             var culture = new System.Globalization.CultureInfo("en-US", false);
             culture.NumberFormat.NumberDecimalDigits = 4;
@@ -64,8 +69,8 @@ namespace Satellite_Analyzer
 
             using var reader = new StreamReader(filePath);
             using var csv = new CsvReader(reader, culture);
-            List<SevereStorm> events = csv.GetRecords<SevereStorm>().ToList();
-            events.Sort((a, b) => a.location.CompareTo(b.location));
+            List<SevereStormEU> events = csv.GetRecords<SevereStormEU>().ToList();
+            //events.Sort((a, b) => a.location.CompareTo(b.location));
 
             eventList.ItemsSource = events;
         }
@@ -114,6 +119,9 @@ namespace Satellite_Analyzer
 
             ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
             predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
+            Cv2.MinMaxLoc(predImg, out double _, out double maxVal);
+
+            scoreLabel.Content = maxVal.ToString();
 
             landcoverImg = await SystematicSearch.LandCoverMask(envelope, beforeImg.Size());
 
@@ -121,8 +129,9 @@ namespace Satellite_Analyzer
             beforeUDMImg = new Mat();
             afterUDMImg = new Mat();
 
-            Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
-            Cv2.BitwiseAnd(mask, beforeCCImg, mask);
+            //Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
+            //Cv2.BitwiseAnd(mask, beforeCCImg, mask);
+            Cv2.BitwiseAnd(afterCCImg, beforeCCImg, mask);
 
             Cv2.BitwiseAnd(beforeImg, mask, beforeUDMImg);
             Cv2.BitwiseAnd(afterImg, mask, afterUDMImg);
@@ -206,11 +215,16 @@ namespace Satellite_Analyzer
 
         private void UpdateSearchParams(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            SevereStorm storm = eventList.SelectedItem as SevereStorm;
+            SevereStormEU storm = eventList.SelectedItem as SevereStormEU;
 
-            tileSearchInput.SetCoordinates(storm.worstLat, -storm.worstLon);
+            //tileSearchInput.SetCoordinates(storm.worstLat, -storm.worstLon);
+            tileSearchInput.SetCoordinates(storm.N, -storm.E);
 
-            int beforeYear = storm.month >= 8 ? storm.year : storm.year - 1;
+            //int beforeYear = storm.month >= 8 ? storm.year : storm.year - 1;
+            int month = Int32.Parse(storm.date.Substring(3, 2));
+            int year = Int32.Parse(storm.date.Substring(6, 4));
+
+            int beforeYear = month >= 8 ? year : year - 1;
 
             beforeDate.SetDate(8, beforeYear);
             afterDate.SetDate(8, beforeYear + 1); 
@@ -242,6 +256,27 @@ namespace Satellite_Analyzer
 
         private void Save(object sender, RoutedEventArgs e)
         {
+            (eventList.SelectedItem as SevereStormEU).forest = true;
+            eventList.Items.Refresh();
+
+            var filePath = "C:\\Users\\dbutt7\\Documents\\eu_tornadoes\\forest_tornadoes_eu_modified.csv";
+            using (TextWriter writer = new StreamWriter(filePath, false, Encoding.UTF8))
+            {
+                var culture = new System.Globalization.CultureInfo("en-US", false);
+                culture.NumberFormat.NumberDecimalDigits = 4;
+                culture.NumberFormat.CurrencyDecimalDigits = 4;
+                culture.NumberFormat.PercentDecimalDigits = 4;
+
+                using var csv = new CsvWriter(writer, culture);
+
+                foreach (var item in eventList.Items)
+                {
+                    csv.WriteRecord(item as SevereStormEU);
+                    csv.NextRecord();
+                }
+            }
+
+            /*
             SevereStorm storm = eventList.SelectedItem as SevereStorm;
 
             string path = "C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved\\" + "additional_other"; //storm.location;
@@ -271,6 +306,7 @@ namespace Satellite_Analyzer
             {
                 rect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.LightSkyBlue);
             }
+            */
 
             //foreach (var rect in otherRects)
             //{
@@ -355,7 +391,7 @@ namespace Satellite_Analyzer
                     break;
             }
 
-            e.Handled = true;
+            //e.Handled = true;
         }
     }
 }
