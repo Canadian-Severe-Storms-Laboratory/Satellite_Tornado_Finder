@@ -22,6 +22,7 @@ using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Formats.Asn1;
+using System.Windows.Controls;
 
 namespace Satellite_Analyzer
 {
@@ -58,21 +59,9 @@ namespace Satellite_Analyzer
 
         private void LoadSavedEvents()
         {
-            //update to relative path...
-            //var filePath = AddinAssemblyLocation() + "\\forest_tornadoes_modified.csv";
-            var filePath = AddinAssemblyLocation() + "\\forest_tornadoes_eu.csv";
+            CanadianEventList.ItemsSource = SevereStormCA.LoadSavedEvents();
+            EUEventList.ItemsSource = SevereStormEU.LoadSavedEvents();
 
-            var culture = new System.Globalization.CultureInfo("en-US", false);
-            culture.NumberFormat.NumberDecimalDigits = 4;
-            culture.NumberFormat.CurrencyDecimalDigits = 4;
-            culture.NumberFormat.PercentDecimalDigits = 4;
-
-            using var reader = new StreamReader(filePath);
-            using var csv = new CsvReader(reader, culture);
-            List<SevereStormEU> events = csv.GetRecords<SevereStormEU>().ToList();
-            //events.Sort((a, b) => a.location.CompareTo(b.location));
-
-            eventList.ItemsSource = events;
         }
 
         private async void Search(object sender=null, RoutedEventArgs e=null)
@@ -215,19 +204,15 @@ namespace Satellite_Analyzer
 
         private void UpdateSearchParams(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            SevereStormEU storm = eventList.SelectedItem as SevereStormEU;
+            SevereStorm storm = (sender as ListBox).SelectedItem as SevereStorm;
 
-            //tileSearchInput.SetCoordinates(storm.worstLat, -storm.worstLon);
-            tileSearchInput.SetCoordinates(storm.N, -storm.E);
+            var (N, W) = storm.SearchCoords();
+            tileSearchInput.SetCoordinates(N, W);
 
-            //int beforeYear = storm.month >= 8 ? storm.year : storm.year - 1;
-            int month = Int32.Parse(storm.date.Substring(3, 2));
-            int year = Int32.Parse(storm.date.Substring(6, 4));
+            int year = storm.SearchYear();
 
-            int beforeYear = month >= 8 ? year : year - 1;
-
-            beforeDate.SetDate(8, beforeYear);
-            afterDate.SetDate(8, beforeYear + 1); 
+            beforeDate.SetDate(8, year);
+            afterDate.SetDate(8, year + 1); 
         }
 
         private int[] RectsBounds()
@@ -256,8 +241,8 @@ namespace Satellite_Analyzer
 
         private void Save(object sender, RoutedEventArgs e)
         {
-            (eventList.SelectedItem as SevereStormEU).forest = true;
-            eventList.Items.Refresh();
+            (EUEventList.SelectedItem as SevereStormEU).forest = true;
+            EUEventList.Items.Refresh();
 
             var filePath = "C:\\Users\\dbutt7\\Documents\\eu_tornadoes\\forest_tornadoes_eu_modified.csv";
             using (TextWriter writer = new StreamWriter(filePath, false, Encoding.UTF8))
@@ -269,7 +254,7 @@ namespace Satellite_Analyzer
 
                 using var csv = new CsvWriter(writer, culture);
 
-                foreach (var item in eventList.Items)
+                foreach (var item in EUEventList.Items)
                 {
                     csv.WriteRecord(item as SevereStormEU);
                     csv.NextRecord();

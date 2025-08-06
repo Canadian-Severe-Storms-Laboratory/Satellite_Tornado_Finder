@@ -34,9 +34,31 @@
 
         <Button Click="Search" Grid.Column="0" Content="Search" HorizontalAlignment="Left" VerticalAlignment="Top" Width="80" Margin="10,270,0,0" FontSize="14" FontWeight="Bold"/>
 
-        <Label Grid.Column="0" Content="Saved Events" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,325,0,0" FontSize="14" FontWeight="Bold"/>
-        <ListBox x:Name="eventList" SelectionChanged="UpdateSearchParams" Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="20,360,20,20"/>
+        <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Margin="0,325,0,20">
 
+            <Grid.RowDefinitions>
+                <RowDefinition Height="1*"/>
+                <RowDefinition Height="1*"/>
+                <RowDefinition Height="1*"/>
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                <Label Content="Canadian Events" DockPanel.Dock="Top" HorizontalAlignment="Center" VerticalAlignment="Stretch" FontSize="14" FontWeight="Bold"/>
+                <ListBox x:Name="CanadianEventList" DockPanel.Dock="Bottom" SelectionChanged="UpdateSearchParams" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Margin="20,0,20,10"/>
+            </DockPanel>
+
+            <DockPanel Grid.Row="1"  VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                <Label Content="EU Events" DockPanel.Dock="Top" HorizontalAlignment="Center" VerticalAlignment="Stretch" Margin="0,0,0,0" FontSize="14" FontWeight="Bold"/>
+                <ListBox x:Name="EUEventList" DockPanel.Dock="Bottom" SelectionChanged="UpdateSearchParams" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Margin="20,0,20,10"/>
+            </DockPanel>
+
+            <DockPanel Grid.Row="2" VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                <Label Content="US Events" DockPanel.Dock="Top" HorizontalAlignment="Center" VerticalAlignment="Stretch" Margin="0,0,0,0" FontSize="14" FontWeight="Bold"/>
+                <ListBox x:Name="USEventList" DockPanel.Dock="Bottom" SelectionChanged="UpdateSearchParams" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Margin="20,0,20,10"/>
+            </DockPanel>
+        </Grid>
+        
+        
         <Button Grid.Column="2" VerticalAlignment="Bottom" Content="Save" HorizontalAlignment="Center" Margin="0,0,0,10" Height="30" Width="100" Click="Save"/>
 
         <Label Grid.Column="0" Content="Before Date" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,120,0,0" FontSize="14" FontWeight="Bold"/>
