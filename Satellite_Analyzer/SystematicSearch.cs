@@ -17,13 +17,13 @@ using BitMiracle.LibTiff.Classic;
 
 namespace Satellite_Analyzer
 {
-    public struct SearchResult(int x, int y, int s)
+    public struct SearchResult(int x, int y, int s, int c)
     {
-        public int tileX = x, tileY = y, score = s;
+        public int tileX = x, tileY = y, score = s, count = c;
 
         public override readonly string ToString()
         {
-            return string.Format("{0}, {1} - {2}", tileX, tileY, score);
+            return string.Format("{0}, {1} - {2} ({3})", tileX, tileY, score, count);
         }
     }
 
@@ -50,6 +50,7 @@ namespace Satellite_Analyzer
 
         private static PlanetReader planetReader;
         private static TornadoPatchPredictor tpp;
+        private static TornadoPatchPredictor64 tpp64;
         private static List<(int, int)> tiles;
         private static List<SearchResult> foundTiles;
         private static string savePath;
@@ -71,6 +72,7 @@ namespace Satellite_Analyzer
             foundTiles = [];
 
             tpp = new(AddinAssemblyLocation() + "\\tornado_patch_predictor_de_norm.onnx");
+            tpp64 = new(AddinAssemblyLocation() + "\\model64.onnx");
 
             savePath = CreateResultsFolder();
 
@@ -168,7 +170,7 @@ namespace Satellite_Analyzer
                 EnsureOrdered = false
             });
 
-            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[]), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector)>((packet) =>
+            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[]), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector, ByteVector)>((packet) =>
             {
                 try
                 {
@@ -176,21 +178,22 @@ namespace Satellite_Analyzer
 
                     var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes) = packet;
 
-                    if (monitor.cancelled || beforeImg == null || afterImg == null) return (x, y, null, null, null, null, null, null, null, null);
+                    if (monitor.cancelled || beforeImg == null || afterImg == null) return (x, y, null, null, null, null, null, null, null, null, null);
 
-                    ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
+                    ByteVector tornadoPredictionA = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
+                    ByteVector tornadoPredictionB = tpp64.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
 
                     watch.Stop();
                     Console.WriteLine($"Tile {x}, {y} predicted in {watch.ElapsedMilliseconds} ms");
 
-                    return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction);
+                    return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPredictionA, tornadoPredictionB);
                 }
                 catch (Exception ex)
                 {
                     System.Windows.MessageBox.Show("Error in Prediction Block:\n\n" + ex.Message);
                 }
 
-                return (packet.Item1, packet.Item2, null, null, null, null, null, null, null, null);
+                return (packet.Item1, packet.Item2, null, null, null, null, null, null, null, null, null);
             }, 
             new ExecutionDataflowBlockOptions
             {
@@ -198,24 +201,30 @@ namespace Satellite_Analyzer
                 EnsureOrdered = false
             });
 
-            var postProcessBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector), (int, int, int, Mat, Mat, Mat, Mat, byte[])> (async (packet) =>
+            var postProcessBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector, ByteVector), (int, int, int, int, Mat, Mat, Mat, Mat, byte[])> (async (packet) =>
             {
                 try 
                 { 
-                    if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, null, null, null, null, null);
+                    if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, 0, null, null, null, null, null);
                     var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                    var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPrediction) = packet;
+                    var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPredictionA, tornadoPredictionB) = packet;
 
-                    if (beforeImg == null || afterImg == null) return (x, y, 0, null, null, null, null, null);
+                    if (beforeImg == null || afterImg == null) return (x, y, 0, 0, null, null, null, null, null);
 
-                    Mat predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
+                    Mat predAImg = ByteVector.ToMat(tornadoPredictionA, beforeImg.Size());
+                    Mat predBImg = ByteVector.ToMat(tornadoPredictionB, beforeImg.Size());
+
+                    Mat predImg = FloatMulNormalized(predAImg, predBImg);
 
                     Mat landcoverImg = await LandCoverMask(envelope, beforeImg.Size());
 
+                    Mat colorChangeMask = ColorChangeMask(beforeImg, afterImg);
+
                     Mat mask = new();
-                    Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
+                    Cv2.BitwiseAnd(colorChangeMask, landcoverImg, mask);
                     Cv2.BitwiseAnd(mask, beforeCCImg, mask);
+                    Cv2.BitwiseAnd(mask, afterCCImg, mask);
 
                     Mat diffImg = AbsDifferenceImage(beforeImg, afterImg);
                     Cv2.BitwiseAnd(mask, diffImg, diffImg);
@@ -223,22 +232,23 @@ namespace Satellite_Analyzer
                     Cv2.CvtColor(mask, mask, ColorConversionCodes.BGR2GRAY);
 
                     Cv2.BitwiseAnd(predImg, mask, predImg);
-                    Cv2.MorphologyEx(predImg, predImg, MorphTypes.Open, Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(15, 15)));
+                    //Cv2.MorphologyEx(predImg, predImg, MorphTypes.Open, Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(15, 15)));
                     Cv2.MinMaxLoc(predImg, out double _, out double maxVal);
-                    Cv2.Threshold(predImg, predImg, 127, 255, ThresholdTypes.Binary);
 
-                    //int pxCount = Cv2.CountNonZero(predImg);
+                    int pxCount = Cv2.CountNonZero(predImg.Threshold(Math.Max(maxVal-1, 0), 255, ThresholdTypes.Binary));
+
+                    predImg = predImg.Threshold(127, 255, ThresholdTypes.Binary);
 
                     watch.Stop();
                     Console.WriteLine($"Tile {x}, {y} post processed in {watch.ElapsedMilliseconds} ms");
 
-                    return (x, y, (int)maxVal, predImg, diffImg, beforeImg, afterImg, afterBytes);
+                    return (x, y, (int)maxVal, pxCount, predImg, diffImg, beforeImg, afterImg, afterBytes);
                 }
                 catch (Exception ex) {
                     System.Windows.MessageBox.Show( "Error in Post Processing Block:\n\n" + ex.Message );
                 }
 
-                return (packet.Item1, packet.Item2, 0, null, null, null, null, null);
+                return (packet.Item1, packet.Item2, 0, 0, null, null, null, null, null);
             },
             new ExecutionDataflowBlockOptions
             {
@@ -246,13 +256,13 @@ namespace Satellite_Analyzer
                 EnsureOrdered = false
             });
 
-            var saveBlock = new ActionBlock<(int, int, int, Mat, Mat, Mat, Mat, byte[])>(async (packet) =>
+            var saveBlock = new ActionBlock<(int, int, int, int, Mat, Mat, Mat, Mat, byte[])>(async (packet) =>
             {
                 try
                 {
                     if (monitor.cancelled) return;
 
-                    var (x, y, maxVal, predImg, diffImg, beforeImg, afterImg, afterBytes) = packet;
+                    var (x, y, maxVal, pxCount, predImg, diffImg, beforeImg, afterImg, afterBytes) = packet;
 
                     string imgName = $"_{x}_{y}.png";
 
@@ -272,7 +282,7 @@ namespace Satellite_Analyzer
                     Tiff pred = GeoTiff.CreateFromReference(afterBytes, savePath + $"\\pred_{x}_{y}.tif");
                     GeoTiff.WriteImage(pred, predImg);
 
-                    significantTiles.Add(new(x, y, maxVal));
+                    significantTiles.Add(new(x, y, maxVal, pxCount));
 
                     await QueuedTask.Run(() =>
                     {
@@ -316,7 +326,7 @@ namespace Satellite_Analyzer
 
                 monitor.Stop();
 
-                foundTiles = [.. significantTiles.OrderByDescending(x => x.score)]; //[.. significantTiles.OrderBy(x => x.tileY).ThenBy(x => x.tileX)];
+                foundTiles = [.. significantTiles.OrderByDescending(x => x.score).ThenByDescending(x => x.count)]; //[.. significantTiles.OrderBy(x => x.tileY).ThenBy(x => x.tileX)];
 
                 SaveSearchResults();
             }
@@ -356,6 +366,20 @@ namespace Satellite_Analyzer
             return landcoverImg;
         }
 
+        public static Mat ColorChangeMask(Mat before, Mat after, int threshold = 15)
+        {
+            Mat beforeRed = before.ExtractChannel(2);
+            Mat afterRed = after.ExtractChannel(2);
+            
+            Mat diff = new();
+            Cv2.Subtract(afterRed, beforeRed, diff);
+            
+            Mat mask = new();
+            Cv2.Threshold(diff, mask, threshold, 255, ThresholdTypes.Binary);
+            
+            return mask.CvtColor(ColorConversionCodes.GRAY2BGR);
+        }
+
         public static Mat AbsDifferenceImage(Mat before, Mat after)
         {
             Mat diffImg = new();
@@ -368,6 +392,20 @@ namespace Satellite_Analyzer
             return diffImg;
         }
 
+        public static Mat FloatMulNormalized(Mat imgA, Mat imgB)
+        {
+            Mat imgAFloat = new(); Mat imgBFloat = new(); Mat resultFloat = new();
+
+            imgA.ConvertTo(imgAFloat, MatType.CV_32F, 1.0 / 255.0); 
+            imgB.ConvertTo(imgBFloat, MatType.CV_32F, 1.0 / 255.0);
+
+            Cv2.Multiply(imgAFloat, imgBFloat, resultFloat);
+
+            Mat result = new(); 
+            resultFloat.ConvertTo(result, MatType.CV_8U, 255.0);
+
+            return result;
+        }
 
         private static List<(int, int)> PolygonToTiles(Polygon polygon)
         {

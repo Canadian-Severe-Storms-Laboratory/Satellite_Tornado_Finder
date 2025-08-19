@@ -72,12 +72,15 @@
         <ListBox x:Name="imageList" Grid.Column="2" SelectedIndex="0" SelectionChanged="UpdatePlot" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Margin="20,20,20,125" FontSize="14" FontWeight="Bold">
             <ListBoxItem Content="Before" Height="50"/>
             <ListBoxItem Content="After" Height="50"/>
+            <ListBoxItem Content="Color Change" Height="50"/>
             <ListBoxItem Content="Landcover" Height="50"/>
             <ListBoxItem Content="Before Cloudcover" Height="50"/>
             <ListBoxItem Content="After Cloudcover" Height="50"/>
             <ListBoxItem Content="Before UDM" Height="50"/>
             <ListBoxItem Content="After UDM" Height="50"/>
             <ListBoxItem Content="Difference" Height="50"/>
+            <ListBoxItem Content="Prediction A" Height="50"/>
+            <ListBoxItem Content="Prediction B" Height="50"/>
             <ListBoxItem Content="Prediction" Height="50"/>
         </ListBox>
 

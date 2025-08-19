@@ -68,7 +68,7 @@ namespace Satellite_Analyzer
 
             loadingLabel.Visibility = Visibility.Hidden;
 
-            TornadoPatchPredictor tpp = new(AddinAssemblyLocation() + "\\tornado_patch_predictor_de_norm.onnx");
+            TornadoPatchPredictor tpp = new(AddinAssemblyLocation() + "\\model64.onnx");
 
             if (tpp.usingGPU)
             {

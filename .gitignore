@@ -6,5 +6,7 @@
 /Satellite_Analyzer/Images
 /Satellite_Analyzer/DarkImages
 
+/Satellite_Analyzer/model64.onnx
+
 /TornadoPredictorOnnx/x64
 

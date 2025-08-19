@@ -7,6 +7,7 @@
 #include <string>
 #include <array>
 #include <vector>
+#include <fstream>
 
 
 EXPORT class OnnxModel{
@@ -81,6 +82,8 @@ public:
 		OrtApi const& ortApi = Ort::GetApi();
 
 		attemptToUseGPU(ortApi, sessionOptions);
+
+		ortApi.AddFreeDimensionOverrideByName(sessionOptions, "batch_size", batchSize);
 
 		session = Ort::Session(env, wModelPath.c_str(), sessionOptions);
 

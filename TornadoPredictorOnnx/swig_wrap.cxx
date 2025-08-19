@@ -354,7 +354,8 @@ template <typename T> T SwigValueInit() {
 
 #include "CPP_CS_Interop.h"
 #include "OnnxModel.h"
-#include "TornadoPatchPredictor.h" //C++ headers
+#include "TornadoPatchPredictor.h"
+#include "TornadoPatchPredictor64.h"
 
 
 #include <string>
@@ -1777,7 +1778,63 @@ SWIGEXPORT void SWIGSTDCALL CSharp_delete_TornadoPatchPredictor(void * jarg1) {
 }
 
 
+SWIGEXPORT void * SWIGSTDCALL CSharp_new_TornadoPatchPredictor64(const char * jarg1) {
+  void * jresult ;
+  std::string arg1 ;
+  TornadoPatchPredictor64 *result = 0 ;
+  
+  if (!jarg1) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "null string", 0);
+    return 0;
+  }
+  (&arg1)->assign(jarg1); 
+  result = (TornadoPatchPredictor64 *)new TornadoPatchPredictor64(arg1);
+  jresult = (void *)result; 
+  return jresult;
+}
+
+
+SWIGEXPORT void * SWIGSTDCALL CSharp_TornadoPatchPredictor64_analyze(void * jarg1, void * jarg2, void * jarg3, int jarg4, int jarg5) {
+  void * jresult ;
+  TornadoPatchPredictor64 *arg1 = (TornadoPatchPredictor64 *) 0 ;
+  std::vector< unsigned char > *arg2 = 0 ;
+  std::vector< unsigned char > *arg3 = 0 ;
+  int arg4 ;
+  int arg5 ;
+  std::vector< unsigned char > result;
+  
+  arg1 = (TornadoPatchPredictor64 *)jarg1; 
+  arg2 = (std::vector< unsigned char > *)jarg2;
+  if (!arg2) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< unsigned char > & is null", 0);
+    return 0;
+  } 
+  arg3 = (std::vector< unsigned char > *)jarg3;
+  if (!arg3) {
+    SWIG_CSharpSetPendingExceptionArgument(SWIG_CSharpArgumentNullException, "std::vector< unsigned char > & is null", 0);
+    return 0;
+  } 
+  arg4 = (int)jarg4; 
+  arg5 = (int)jarg5; 
+  result = (arg1)->analyze(*arg2,*arg3,arg4,arg5);
+  jresult = new std::vector< unsigned char >(result); 
+  return jresult;
+}
+
+
+SWIGEXPORT void SWIGSTDCALL CSharp_delete_TornadoPatchPredictor64(void * jarg1) {
+  TornadoPatchPredictor64 *arg1 = (TornadoPatchPredictor64 *) 0 ;
+  
+  arg1 = (TornadoPatchPredictor64 *)jarg1; 
+  delete arg1;
+}
+
+
 SWIGEXPORT OnnxModel * SWIGSTDCALL CSharp_TornadoPatchPredictor_SWIGUpcast(TornadoPatchPredictor *jarg1) {
+    return (OnnxModel *)jarg1;
+}
+
+SWIGEXPORT OnnxModel * SWIGSTDCALL CSharp_TornadoPatchPredictor64_SWIGUpcast(TornadoPatchPredictor64 *jarg1) {
     return (OnnxModel *)jarg1;
 }
 

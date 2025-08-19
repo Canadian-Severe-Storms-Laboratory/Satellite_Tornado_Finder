@@ -183,6 +183,7 @@
     <ClInclude Include="CPP_CS_Interop.h" />
     <ClInclude Include="OnnxModel.h" />
     <ClInclude Include="TornadoPatchPredictor.h" />
+    <ClInclude Include="TornadoPatchPredictor64.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />

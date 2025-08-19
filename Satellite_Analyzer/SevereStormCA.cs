@@ -44,6 +44,11 @@ namespace Satellite_Analyzer
         [Index(16)]
         public int fromDirection { get; set; }
 
+        public override string Name() 
+        {
+            return $"{location}_{year}";
+        }
+
         public override string ToString() { 
             return $"{location}, {year}";
         }

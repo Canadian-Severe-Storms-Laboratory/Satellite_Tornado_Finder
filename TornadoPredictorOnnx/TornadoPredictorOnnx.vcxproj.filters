@@ -23,13 +23,16 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="TornadoPatchPredictor.h">
+    <ClInclude Include="TornadoPatchPredictor64.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="CPP_CS_Interop.h">
       <Filter>SWIG</Filter>
     </ClInclude>
     <ClInclude Include="OnnxModel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TornadoPatchPredictor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -41,5 +44,6 @@
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)..\..\runtimes\win-x64\native\onnxruntime.dll" />
     <None Include="packages.config" />
+    <None Include="$(MSBuildThisFileDirectory)..\..\runtimes\win-x64\native\onnxruntime_providers_shared.dll" />
   </ItemGroup>
 </Project>

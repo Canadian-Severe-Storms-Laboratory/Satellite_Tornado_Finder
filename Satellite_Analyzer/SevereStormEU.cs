@@ -1,5 +1,7 @@
 ﻿using CsvHelper;
 using CsvHelper.Configuration.Attributes;
+using ScottPlot;
+using ScottPlot.TickGenerators.TimeUnits;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,6 +27,11 @@ namespace Satellite_Analyzer
         public string date { get; set; }
         [Index(6)]
         public bool forest { get; set; }
+
+        public override string Name()
+        {
+            return $"{place}_{id.Substring(0, 2)}";
+        }
 
         public override string ToString()
         {

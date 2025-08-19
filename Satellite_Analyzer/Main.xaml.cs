@@ -36,19 +36,25 @@ namespace Satellite_Analyzer
 
         private Mat beforeImg = null;
         private Mat afterImg = null;
+        private Mat colorChangeMask = null;
         private Mat landcoverImg = null;
         private Mat beforeCCImg = null;
         private Mat afterCCImg = null;
         private Mat beforeUDMImg = null;
         private Mat afterUDMImg = null;
         private Mat diffImg = null;
+        private Mat predAImg = null;
+        private Mat predBImg = null;
         private Mat predImg = null;
 
         private Envelope envelope = null;
         private (double, double) worstPoint;
         private Random r = new Random();
 
+        private SevereStorm selectedEvent = null;
+
         private TornadoPatchPredictor tpp;
+        private TornadoPatchPredictor64 tpp64;
 
         public Main()
         {
@@ -76,6 +82,13 @@ namespace Satellite_Analyzer
             if (tileSearchInput.IsTileIndexSearch()) 
             {
                 var (tileX, tileY) = tileSearchInput.GetTileIndex();
+
+                if (tileX == 0 || tileY == 0)
+                {
+                    loadingLabel.Visibility = Visibility.Hidden;
+                    MessageBox.Show("Please enter a valid tile index");
+                    return;
+                }
 
                 var (beforeBytes, beforeMaskBytes, envel, beforeMaskType) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
 
@@ -107,7 +120,13 @@ namespace Satellite_Analyzer
             Cv2.MedianBlur(afterImg, afterImg, 5);
 
             ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
-            predImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
+            predAImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
+
+            tornadoPrediction = tpp64.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
+            predBImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
+
+            predImg = SystematicSearch.FloatMulNormalized(predAImg, predBImg);
+
             Cv2.MinMaxLoc(predImg, out double _, out double maxVal);
 
             scoreLabel.Content = maxVal.ToString();
@@ -118,18 +137,21 @@ namespace Satellite_Analyzer
             beforeUDMImg = new Mat();
             afterUDMImg = new Mat();
 
-            //Cv2.BitwiseAnd(afterCCImg, landcoverImg, mask);
-            //Cv2.BitwiseAnd(mask, beforeCCImg, mask);
-            Cv2.BitwiseAnd(afterCCImg, beforeCCImg, mask);
+            colorChangeMask = SystematicSearch.ColorChangeMask(beforeImg, afterImg);
+
+            Cv2.BitwiseAnd(colorChangeMask, landcoverImg, mask);
+            Cv2.BitwiseAnd(mask, beforeCCImg, mask);
+            Cv2.BitwiseAnd(mask, afterCCImg, mask);
+            //Cv2.BitwiseAnd(afterCCImg, beforeCCImg, mask);
 
             Cv2.BitwiseAnd(beforeImg, mask, beforeUDMImg);
             Cv2.BitwiseAnd(afterImg, mask, afterUDMImg);
 
             diffImg = SystematicSearch.AbsDifferenceImage(beforeUDMImg, afterUDMImg);
 
-            imgPlottables = [MatToImageRect(beforeImg), MatToImageRect(afterImg), MatToImageRect(landcoverImg),
+            imgPlottables = [MatToImageRect(beforeImg), MatToImageRect(afterImg), MatToImageRect(colorChangeMask), MatToImageRect(landcoverImg),
                              MatToImageRect(beforeCCImg), MatToImageRect(afterCCImg), MatToImageRect(beforeUDMImg), 
-                             MatToImageRect(afterUDMImg), MatToImageRect(diffImg), MatToImageRect(predImg)];
+                             MatToImageRect(afterUDMImg), MatToImageRect(diffImg), MatToImageRect(predAImg), MatToImageRect(predBImg), MatToImageRect(predImg)];
 
             rects.Clear();
             otherRects.Clear();
@@ -150,6 +172,7 @@ namespace Satellite_Analyzer
             plt.PlottableList.Add(imRect);
             plt.Add.Marker(worstPoint.Item1, worstPoint.Item2, shape: MarkerShape.OpenTriangleUp, color: ScottPlot.Color.FromARGB(0xFF01F9C6), size: 50);
             plt.PlottableList.AddRange(rects);
+            plt.PlottableList.AddRange(otherRects);
 
             //plt.Axes.AutoScale();
 
@@ -187,7 +210,8 @@ namespace Satellite_Analyzer
 
             //update to relative path...
             tpp = new(AddinAssemblyLocation() + "\\tornado_patch_predictor_de_norm.onnx");
-            
+            tpp64 = new(AddinAssemblyLocation() + "\\model64.onnx");
+
             if (tpp.usingGPU)
             {
                 executionProviderLabel.Content = "Using GPU";
@@ -204,12 +228,12 @@ namespace Satellite_Analyzer
 
         private void UpdateSearchParams(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
-            SevereStorm storm = (sender as ListBox).SelectedItem as SevereStorm;
+            selectedEvent = (sender as ListBox).SelectedItem as SevereStorm;
 
-            var (N, W) = storm.SearchCoords();
+            var (N, W) = selectedEvent.SearchCoords();
             tileSearchInput.SetCoordinates(N, W);
 
-            int year = storm.SearchYear();
+            int year = selectedEvent.SearchYear();
 
             beforeDate.SetDate(8, year);
             afterDate.SetDate(8, year + 1); 
@@ -217,6 +241,7 @@ namespace Satellite_Analyzer
 
         private int[] RectsBounds()
         {
+            if (rects.IsNullOrEmpty()) return [0, 4064, 0, 4064];
             int x1 = (int)rects.Min(r => r.X1);
             int x2 = (int)rects.Max(r => r.X2);
             int y1 = 4095 - (int)rects.Min(r => r.Y1);
@@ -239,36 +264,17 @@ namespace Satellite_Analyzer
             }
         }
 
+        bool drawOther = false;
+
         private void Save(object sender, RoutedEventArgs e)
         {
-            (EUEventList.SelectedItem as SevereStormEU).forest = true;
-            EUEventList.Items.Refresh();
+            SevereStorm storm = selectedEvent;
 
-            var filePath = "C:\\Users\\dbutt7\\Documents\\eu_tornadoes\\forest_tornadoes_eu_modified.csv";
-            using (TextWriter writer = new StreamWriter(filePath, false, Encoding.UTF8))
-            {
-                var culture = new System.Globalization.CultureInfo("en-US", false);
-                culture.NumberFormat.NumberDecimalDigits = 4;
-                culture.NumberFormat.CurrencyDecimalDigits = 4;
-                culture.NumberFormat.PercentDecimalDigits = 4;
-
-                using var csv = new CsvWriter(writer, culture);
-
-                foreach (var item in EUEventList.Items)
-                {
-                    csv.WriteRecord(item as SevereStormEU);
-                    csv.NextRecord();
-                }
-            }
-
-            /*
-            SevereStorm storm = eventList.SelectedItem as SevereStorm;
-
-            string path = "C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved\\" + "additional_other"; //storm.location;
+            string path = "C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved_EU\\" + storm.Name();
 
             System.IO.Directory.CreateDirectory(path);
-            //System.IO.Directory.CreateDirectory(path + "\\before");
-            //System.IO.Directory.CreateDirectory(path + "\\after");
+            System.IO.Directory.CreateDirectory(path + "\\before");
+            System.IO.Directory.CreateDirectory(path + "\\after");
             System.IO.Directory.CreateDirectory(path + "\\before_other");
             System.IO.Directory.CreateDirectory(path + "\\after_other");
 
@@ -276,22 +282,43 @@ namespace Satellite_Analyzer
 
             var rectsEnvolope = RectsBounds();
 
+            const int rectSize = 64;
+
             for (int i = 0; i < rects.Count; i++)
             {
                 var rect = rects[i];
 
-                Mat before = new(beforeImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, 32, 32));
-                Mat after = new(afterImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, 32, 32));
+                if (rect.X1 < 0 || rect.X2 >= 4095 - rectSize || rect.Y1 < 0 || rect.Y2 >= 4095 - rectSize) continue;
+
+                Mat before = new(beforeImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
+                Mat after = new(afterImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
+
+                Cv2.ImWrite(path + "\\before\\" + (i + fCount) + ".png", before);
+                Cv2.ImWrite(path + "\\after\\" + (i + fCount) + ".png", after);
+            }
+
+            for (int i = 0; i < otherRects.Count; i++)
+            {
+                var rect = otherRects[i];
+
+                if (rect.X1 < 0 || rect.X2 >= 4095 - rectSize || rect.Y1 < 0 || rect.Y2 >= 4095 - rectSize) continue;
+
+                Mat before = new(beforeImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
+                Mat after = new(afterImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
 
                 Cv2.ImWrite(path + "\\before_other\\" + (i + fCount) + ".png", before);
                 Cv2.ImWrite(path + "\\after_other\\" + (i + fCount) + ".png", after);
             }
 
-            foreach(var rect in rects)
+            foreach (var rect in rects)
             {
                 rect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.LightSkyBlue);
             }
-            */
+
+            foreach (var rect in otherRects)
+            {
+                rect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.LightSkyBlue);
+            }
 
             //foreach (var rect in otherRects)
             //{
@@ -302,24 +329,24 @@ namespace Satellite_Analyzer
 
             //for (int i = 0; i < rects.Count; i++)
             //{
-            //    var rect = RandomRect(beforeImg.Width, beforeImg.Height, 32, 32, rectsEnvolope);
+            //    var rect = RandomRect(beforeImg.Width, beforeImg.Height, rectSize, rectSize, rectsEnvolope);
 
-            //    var pRect = mainPlot.Plot.Add.Rectangle(rect[0], rect[0] + 31, 4095 - 31 - rect[1], 4095 - rect[1]);
+            //    var pRect = mainPlot.Plot.Add.Rectangle(rect[0], rect[0] + rectSize-1, 4095 - (rectSize-1) - rect[1], 4095 - rect[1]);
             //    pRect.FillColor = ScottPlot.Color.FromARGB(0);
-            //    pRect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.LightSkyBlue);
+            //    pRect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.Green);
 
             //    otherRects.Add(pRect);
 
-            //    Mat before = new(beforeImg, new OpenCvSharp.Rect(rect[0], rect[1], 32, 32));
-            //    Mat after = new(afterImg, new OpenCvSharp.Rect(rect[0], rect[1], 32, 32));
+            //    Mat before = new(beforeImg, new OpenCvSharp.Rect(rect[0], rect[1], rectSize, rectSize));
+            //    Mat after = new(afterImg, new OpenCvSharp.Rect(rect[0], rect[1], rectSize, rectSize));
 
             //    Cv2.ImWrite(path + "\\before_other\\" + i + ".png", before);
             //    Cv2.ImWrite(path + "\\after_other\\" + i + ".png", after);
             //}
 
             mainPlot.Refresh();
-            //Cv2.ImWrite("C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved\\" + storm.location + "\\" + storm.location + "_before.png", beforeImg);
-            //Cv2.ImWrite("C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved\\" + storm.location + "\\" + storm.location + "_after.png", afterImg);
+            Cv2.ImWrite("C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved_EU\\" + storm.Name() + "\\" + storm.Name() + "_before.png", beforeImg);
+            Cv2.ImWrite("C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved_EU\\" + storm.Name() + "\\" + storm.Name() + "_after.png", afterImg);
         }
 
         List<ScottPlot.Plottables.Rectangle> rects = new();
@@ -335,13 +362,20 @@ namespace Satellite_Analyzer
 
                 Coordinates mouseLocation = plt.GetCoordinates(mousePixel);
 
-                var rect = plt.Add.Rectangle((int)mouseLocation.X - 15, (int)mouseLocation.X + 16, (int)mouseLocation.Y + 16, (int)mouseLocation.Y - 15);
-                rect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.Red);
+                var rect = plt.Add.Rectangle((int)mouseLocation.X - 31, (int)mouseLocation.X + 32, (int)mouseLocation.Y + 32, (int)mouseLocation.Y - 31);
+                rect.LineColor = ScottPlot.Color.FromColor(drawOther ? System.Drawing.Color.DarkOrange : System.Drawing.Color.Red);
                 rect.FillColor = ScottPlot.Color.FromARGB(0);
 
-                rects.Add(rect);
-
-                //plt.Add.Marker(mouseLocation.X, mouseLocation.Y, shape: MarkerShape.OpenSquare, color: ScottPlot.Color.FromColor(System.Drawing.Color.Red), size: 32);
+                if (drawOther)
+                {
+                    otherRects.Add(rect);
+                }
+                else
+                {
+                    rects.Add(rect);
+                }
+                    
+                //plt.Add.Marker(mouseLocation.X, mouseLocation.Y, shape: MarkerShape.OpenSquare, color: ScottPlot.Color.FromColor(System.Drawing.Color.Red), size: 64);
                 mainPlot.Refresh();
 
                 e.Handled = true;
@@ -369,10 +403,23 @@ namespace Satellite_Analyzer
                     break;
 
                 case Key.Z:
-                    if (rects.IsNullOrEmpty()) return;
-                    mainPlot.Plot.PlottableList.Remove(rects.Last());
-                    rects.RemoveAt(rects.Count - 1);
+                    if (drawOther)
+                    {
+                        if (otherRects.IsNullOrEmpty()) return;
+                        mainPlot.Plot.PlottableList.Remove(otherRects.Last());
+                        otherRects.RemoveAt(otherRects.Count - 1);
+                    }
+                    else
+                    {
+                        if (rects.IsNullOrEmpty()) return;
+                        mainPlot.Plot.PlottableList.Remove(rects.Last());
+                        rects.RemoveAt(rects.Count - 1);
+                    }
                     mainPlot.Refresh();
+                    break;
+
+                case Key.S:
+                    drawOther = !drawOther;
                     break;
             }
 

@@ -4,7 +4,8 @@
 %{
 #include "CPP_CS_Interop.h"
 #include "OnnxModel.h"
-#include "TornadoPatchPredictor.h" //C++ headers
+#include "TornadoPatchPredictor.h"
+#include "TornadoPatchPredictor64.h"
 %}
 
 %include "typemaps.i"
@@ -41,6 +42,7 @@
 %include "CPP_CS_Interop.h"
 %include "OnnxModel.h"
 %include "TornadoPatchPredictor.h"
+%include "TornadoPatchPredictor64.h"
 
 %begin %{
 #ifndef _NOEXPORT

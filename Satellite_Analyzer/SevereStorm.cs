@@ -2,6 +2,7 @@
 {
     public abstract class SevereStorm
     {
+        public abstract string Name();
         public abstract override string ToString();
         public abstract (double, double) SearchCoords();
         public abstract int SearchYear();

@@ -138,6 +138,9 @@
     <None Update="forest_tornadoes_modified.csv">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="model64.onnx">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
     <None Update="onnxruntime.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
