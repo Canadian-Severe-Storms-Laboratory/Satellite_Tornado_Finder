@@ -432,9 +432,21 @@ class TornadoPredictorOnnxPINVOKE {
   [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_delete_TornadoPatchPredictor64")]
   public static extern void delete_TornadoPatchPredictor64(global::System.Runtime.InteropServices.HandleRef jarg1);
 
+  [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_new_TornadoPatchPredictor64_256")]
+  public static extern global::System.IntPtr new_TornadoPatchPredictor64_256(string jarg1);
+
+  [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_TornadoPatchPredictor64_256_analyze")]
+  public static extern global::System.IntPtr TornadoPatchPredictor64_256_analyze(global::System.Runtime.InteropServices.HandleRef jarg1, global::System.Runtime.InteropServices.HandleRef jarg2, global::System.Runtime.InteropServices.HandleRef jarg3, int jarg4, int jarg5);
+
+  [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_delete_TornadoPatchPredictor64_256")]
+  public static extern void delete_TornadoPatchPredictor64_256(global::System.Runtime.InteropServices.HandleRef jarg1);
+
   [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_TornadoPatchPredictor_SWIGUpcast")]
   public static extern global::System.IntPtr TornadoPatchPredictor_SWIGUpcast(global::System.IntPtr jarg1);
 
   [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_TornadoPatchPredictor64_SWIGUpcast")]
   public static extern global::System.IntPtr TornadoPatchPredictor64_SWIGUpcast(global::System.IntPtr jarg1);
+
+  [global::System.Runtime.InteropServices.DllImport("TornadoPredictorOnnx", EntryPoint="CSharp_TornadoPatchPredictor64_256_SWIGUpcast")]
+  public static extern global::System.IntPtr TornadoPatchPredictor64_256_SWIGUpcast(global::System.IntPtr jarg1);
 }

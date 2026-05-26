@@ -6,6 +6,7 @@
 #include "OnnxModel.h"
 #include "TornadoPatchPredictor.h"
 #include "TornadoPatchPredictor64.h"
+#include "TornadoPatchPredictor64_256.h"
 %}
 
 %include "typemaps.i"
@@ -43,6 +44,7 @@
 %include "OnnxModel.h"
 %include "TornadoPatchPredictor.h"
 %include "TornadoPatchPredictor64.h"
+%include "TornadoPatchPredictor64_256.h"
 
 %begin %{
 #ifndef _NOEXPORT

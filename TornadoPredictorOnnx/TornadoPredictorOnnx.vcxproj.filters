@@ -35,6 +35,9 @@
     <ClInclude Include="TornadoPatchPredictor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TornadoPatchPredictor64_256.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="swig.i">

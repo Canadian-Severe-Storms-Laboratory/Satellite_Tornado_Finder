@@ -129,6 +129,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <None Update="canadian_forest_downbursts.csv">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="DirectML.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -140,6 +143,9 @@
     </None>
     <None Update="model64.onnx">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="model64_256.onnx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update="onnxruntime.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>

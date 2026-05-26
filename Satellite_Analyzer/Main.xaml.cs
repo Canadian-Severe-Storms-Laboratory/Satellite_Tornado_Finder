@@ -54,7 +54,7 @@ namespace Satellite_Analyzer
         private SevereStorm selectedEvent = null;
 
         private TornadoPatchPredictor tpp;
-        private TornadoPatchPredictor64 tpp64;
+        private TornadoPatchPredictor64_256 tpp64_256;
 
         public Main()
         {
@@ -67,7 +67,7 @@ namespace Satellite_Analyzer
         {
             CanadianEventList.ItemsSource = SevereStormCA.LoadSavedEvents();
             EUEventList.ItemsSource = SevereStormEU.LoadSavedEvents();
-
+            DownburstEventList.ItemsSource = DownburstCA.LoadSavedEvents();
         }
 
         private async void Search(object sender=null, RoutedEventArgs e=null)
@@ -122,7 +122,7 @@ namespace Satellite_Analyzer
             ByteVector tornadoPrediction = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
             predAImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
 
-            tornadoPrediction = tpp64.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
+            tornadoPrediction = tpp64_256.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
             predBImg = ByteVector.ToMat(tornadoPrediction, beforeImg.Size());
 
             predImg = SystematicSearch.FloatMulNormalized(predAImg, predBImg);
@@ -210,7 +210,7 @@ namespace Satellite_Analyzer
 
             //update to relative path...
             tpp = new(AddinAssemblyLocation() + "\\tornado_patch_predictor_de_norm.onnx");
-            tpp64 = new(AddinAssemblyLocation() + "\\model64.onnx");
+            tpp64_256 = new(AddinAssemblyLocation() + "\\model64_256.onnx");
 
             if (tpp.usingGPU)
             {
@@ -256,7 +256,7 @@ namespace Satellite_Analyzer
                 int x = r.Next(0, imageWidth);
                 int y = r.Next(0, imageHeight);
 
-                if (x + width >= imageWidth || y + height >= imageHeight) continue;
+                if (x < width || x + width > imageWidth || y < height || y + height > imageHeight) continue;
 
                 if (x + width >= bounds[0] && x <= bounds[1] && y + height >= bounds[3] && y <= bounds[2]) continue;
 
@@ -277,45 +277,36 @@ namespace Satellite_Analyzer
             System.IO.Directory.CreateDirectory(path + "\\after");
             System.IO.Directory.CreateDirectory(path + "\\before_other");
             System.IO.Directory.CreateDirectory(path + "\\after_other");
+            System.IO.Directory.CreateDirectory(path + "\\before_large");
+            System.IO.Directory.CreateDirectory(path + "\\after_large");
+            System.IO.Directory.CreateDirectory(path + "\\before_other_large");
+            System.IO.Directory.CreateDirectory(path + "\\after_other_large");
 
             int fCount = Directory.GetFiles(path + "\\before_other", "*", SearchOption.AllDirectories).Length;
 
             var rectsEnvolope = RectsBounds();
 
             const int rectSize = 64;
+            const int largeRectSize = 256;
 
             for (int i = 0; i < rects.Count; i++)
             {
                 var rect = rects[i];
-
-                if (rect.X1 < 0 || rect.X2 >= 4095 - rectSize || rect.Y1 < 0 || rect.Y2 >= 4095 - rectSize) continue;
 
                 Mat before = new(beforeImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
                 Mat after = new(afterImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
 
                 Cv2.ImWrite(path + "\\before\\" + (i + fCount) + ".png", before);
                 Cv2.ImWrite(path + "\\after\\" + (i + fCount) + ".png", after);
-            }
 
-            for (int i = 0; i < otherRects.Count; i++)
-            {
-                var rect = otherRects[i];
+                Mat largeBefore = new Mat(beforeImg, new OpenCvSharp.Rect((int)rect.X1 - (largeRectSize - rectSize) / 2, 4095 - (int)rect.Y1 - (largeRectSize - rectSize) / 2, largeRectSize, largeRectSize));
+                Mat largeAfter = new Mat(afterImg, new OpenCvSharp.Rect((int)rect.X1 - (largeRectSize - rectSize) / 2, 4095 - (int)rect.Y1 - (largeRectSize - rectSize) / 2, largeRectSize, largeRectSize));
 
-                if (rect.X1 < 0 || rect.X2 >= 4095 - rectSize || rect.Y1 < 0 || rect.Y2 >= 4095 - rectSize) continue;
-
-                Mat before = new(beforeImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
-                Mat after = new(afterImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
-
-                Cv2.ImWrite(path + "\\before_other\\" + (i + fCount) + ".png", before);
-                Cv2.ImWrite(path + "\\after_other\\" + (i + fCount) + ".png", after);
+                Cv2.ImWrite(path + "\\before_large\\" + (i + fCount) + ".png", largeBefore);
+                Cv2.ImWrite(path + "\\after_large\\" + (i + fCount) + ".png", largeAfter);
             }
 
             foreach (var rect in rects)
-            {
-                rect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.LightSkyBlue);
-            }
-
-            foreach (var rect in otherRects)
             {
                 rect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.LightSkyBlue);
             }
@@ -327,26 +318,43 @@ namespace Satellite_Analyzer
 
             //otherRects.Clear();
 
-            //for (int i = 0; i < rects.Count; i++)
-            //{
-            //    var rect = RandomRect(beforeImg.Width, beforeImg.Height, rectSize, rectSize, rectsEnvolope);
+            int diff = rects.Count - otherRects.Count;
 
-            //    var pRect = mainPlot.Plot.Add.Rectangle(rect[0], rect[0] + rectSize-1, 4095 - (rectSize-1) - rect[1], 4095 - rect[1]);
-            //    pRect.FillColor = ScottPlot.Color.FromARGB(0);
-            //    pRect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.Green);
+            for (int i = 0; i < diff; i++)
+            {
+                var rect = RandomRect(beforeImg.Width, beforeImg.Height, largeRectSize, largeRectSize, rectsEnvolope);
 
-            //    otherRects.Add(pRect);
+                var pRect = mainPlot.Plot.Add.Rectangle(rect[0], rect[0] + rectSize - 1, 4095 - (rectSize - 1) - rect[1], 4095 - rect[1]);
+                pRect.FillColor = ScottPlot.Color.FromARGB(0);
 
-            //    Mat before = new(beforeImg, new OpenCvSharp.Rect(rect[0], rect[1], rectSize, rectSize));
-            //    Mat after = new(afterImg, new OpenCvSharp.Rect(rect[0], rect[1], rectSize, rectSize));
+                otherRects.Add(pRect);
+            }
 
-            //    Cv2.ImWrite(path + "\\before_other\\" + i + ".png", before);
-            //    Cv2.ImWrite(path + "\\after_other\\" + i + ".png", after);
-            //}
+            for (int i = 0; i < otherRects.Count; i++)
+            {
+                var rect = otherRects[i];
+
+                Mat before = new(beforeImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
+                Mat after = new(afterImg, new OpenCvSharp.Rect((int)rect.X1, 4095 - (int)rect.Y1, rectSize, rectSize));
+
+                Cv2.ImWrite(path + "\\before_other\\" + (i + fCount) + ".png", before);
+                Cv2.ImWrite(path + "\\after_other\\" + (i + fCount) + ".png", after);
+
+                Mat largeBefore = new Mat(beforeImg, new OpenCvSharp.Rect((int)rect.X1 - (largeRectSize - rectSize) / 2, 4095 - (int)rect.Y1 - (largeRectSize - rectSize) / 2, largeRectSize, largeRectSize));
+                Mat largeAfter = new Mat(afterImg, new OpenCvSharp.Rect((int)rect.X1 - (largeRectSize - rectSize) / 2, 4095 - (int)rect.Y1 - (largeRectSize - rectSize) / 2, largeRectSize, largeRectSize));
+
+                Cv2.ImWrite(path + "\\before_other_large\\" + (i + fCount) + ".png", largeBefore);
+                Cv2.ImWrite(path + "\\after_other_large\\" + (i + fCount) + ".png", largeAfter);
+            }
+
+            foreach (var rect in otherRects)
+            {
+                rect.LineColor = ScottPlot.Color.FromColor(System.Drawing.Color.LightSkyBlue);
+            }
 
             mainPlot.Refresh();
-            Cv2.ImWrite("C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved_EU\\" + storm.Name() + "\\" + storm.Name() + "_before.png", beforeImg);
-            Cv2.ImWrite("C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved_EU\\" + storm.Name() + "\\" + storm.Name() + "_after.png", afterImg);
+            Cv2.ImWrite(path + "\\" + storm.Name() + "_before.png", beforeImg);
+            Cv2.ImWrite(path + "\\" + storm.Name() + "_after.png", afterImg);
         }
 
         List<ScottPlot.Plottables.Rectangle> rects = new();
@@ -354,15 +362,21 @@ namespace Satellite_Analyzer
 
         private void AddMarker(object sender, MouseButtonEventArgs e)
         {
+            const int largeRectSize = 256;
+            const int smallRectSize = 64;
+
             if (e.RightButton == MouseButtonState.Pressed)
             {
+                e.Handled = true;
                 var plt = mainPlot.Plot;
                 var position = e.GetPosition(mainPlot);
                 Pixel mousePixel = new(position.X * mainPlot.DisplayScale, position.Y * mainPlot.DisplayScale);
 
                 Coordinates mouseLocation = plt.GetCoordinates(mousePixel);
 
-                var rect = plt.Add.Rectangle((int)mouseLocation.X - 31, (int)mouseLocation.X + 32, (int)mouseLocation.Y + 32, (int)mouseLocation.Y - 31);
+                if (mouseLocation.X < largeRectSize / 2 || mouseLocation.X >= 4095 - largeRectSize / 2 || mouseLocation.Y < largeRectSize / 2 || mouseLocation.Y >= 4095 - largeRectSize / 2) return;
+
+                var rect = plt.Add.Rectangle((int)mouseLocation.X - (smallRectSize / 2 - 1), (int)mouseLocation.X + (smallRectSize / 2), (int)mouseLocation.Y + (smallRectSize / 2), (int)mouseLocation.Y - (smallRectSize / 2 - 1));
                 rect.LineColor = ScottPlot.Color.FromColor(drawOther ? System.Drawing.Color.DarkOrange : System.Drawing.Color.Red);
                 rect.FillColor = ScottPlot.Color.FromARGB(0);
 
@@ -377,8 +391,6 @@ namespace Satellite_Analyzer
                     
                 //plt.Add.Marker(mouseLocation.X, mouseLocation.Y, shape: MarkerShape.OpenSquare, color: ScottPlot.Color.FromColor(System.Drawing.Color.Red), size: 64);
                 mainPlot.Refresh();
-
-                e.Handled = true;
             }
         }
 

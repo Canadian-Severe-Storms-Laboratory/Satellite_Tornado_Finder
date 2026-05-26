@@ -184,6 +184,7 @@
     <ClInclude Include="OnnxModel.h" />
     <ClInclude Include="TornadoPatchPredictor.h" />
     <ClInclude Include="TornadoPatchPredictor64.h" />
+    <ClInclude Include="TornadoPatchPredictor64_256.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="packages.config" />
