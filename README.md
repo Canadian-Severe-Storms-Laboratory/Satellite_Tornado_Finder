@@ -4,5 +4,6 @@
 ![image](difference_image.png)
 ![image](AI_training.png)
 ![image](AI-pipeline.png)
+![image](models.png)
 ![image](testing_examples.png)
 ![image](arcgis_plugin.png)
