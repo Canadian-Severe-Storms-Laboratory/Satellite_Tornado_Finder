@@ -90,16 +90,9 @@ namespace Satellite_Analyzer
                     return;
                 }
 
-                var (beforeBytes, beforeMaskBytes, envel, beforeMaskType) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
+                (beforeImg, beforeCCImg, envelope) = await planetReader.FindImage(tileX, tileY, bMonth, bYear);
 
-                beforeImg = Cv2.ImDecode(beforeBytes, ImreadModes.Color);
-                beforeCCImg = PlanetReader.DecodeUDM(beforeMaskBytes, beforeMaskType);
-                envelope = envel;
-
-                var (afterBytes, afterMaskBytes, _, afterMaskType) = await planetReader.FindImage(tileX, tileY, aMonth, aYear);
-
-                afterImg = Cv2.ImDecode(afterBytes, ImreadModes.Color);
-                afterCCImg = PlanetReader.DecodeUDM(afterMaskBytes, afterMaskType);
+                (afterImg, afterCCImg, _) = await planetReader.FindImage(tileX, tileY, aMonth, aYear);
             }
             else
             {
@@ -270,7 +263,7 @@ namespace Satellite_Analyzer
         {
             SevereStorm storm = selectedEvent;
 
-            string path = "C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved_EU\\" + storm.Name();
+            string path = "C:\\Users\\danie\\Documents\\Experiments\\Satellite\\Saved_Extra";// + storm.Name();
 
             System.IO.Directory.CreateDirectory(path);
             System.IO.Directory.CreateDirectory(path + "\\before");
@@ -353,8 +346,8 @@ namespace Satellite_Analyzer
             }
 
             mainPlot.Refresh();
-            Cv2.ImWrite(path + "\\" + storm.Name() + "_before.png", beforeImg);
-            Cv2.ImWrite(path + "\\" + storm.Name() + "_after.png", afterImg);
+            //Cv2.ImWrite(path + "\\" + storm.Name() + "_before.png", beforeImg);
+            //Cv2.ImWrite(path + "\\" + storm.Name() + "_after.png", afterImg);
         }
 
         List<ScottPlot.Plottables.Rectangle> rects = new();

@@ -2,17 +2,18 @@
 using ArcGIS.Core.Geometry;
 using ArcGIS.Desktop.Framework.Threading.Tasks;
 using ArcGIS.Desktop.Mapping;
+using BitMiracle.LibTiff.Classic;
+using Newtonsoft.Json;
 using OpenCvSharp;
+using ScottPlot.TickGenerators.TimeUnits;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
-using static ArcGISUtils.Utils;
-using System.Threading.Tasks.Dataflow;
-using System.Collections.Concurrent;
 using System.Linq;
-using Newtonsoft.Json;
-using BitMiracle.LibTiff.Classic;
+using System.Threading.Tasks;
+using System.Threading.Tasks.Dataflow;
+using static ArcGISUtils.Utils;
 
 
 namespace Satellite_Analyzer
@@ -50,7 +51,7 @@ namespace Satellite_Analyzer
 
         private static PlanetReader planetReader;
         private static TornadoPatchPredictor tpp;
-        private static TornadoPatchPredictor64 tpp64;
+        private static TornadoPatchPredictor64_256 tpp64_256;
         private static List<(int, int)> tiles;
         private static List<SearchResult> foundTiles;
         private static string savePath;
@@ -72,7 +73,7 @@ namespace Satellite_Analyzer
             foundTiles = [];
 
             tpp = new(AddinAssemblyLocation() + "\\tornado_patch_predictor_de_norm.onnx");
-            tpp64 = new(AddinAssemblyLocation() + "\\model64.onnx");
+            tpp64_256 = new(AddinAssemblyLocation() + "\\model64_256.onnx");
 
             savePath = CreateResultsFolder();
 
@@ -80,6 +81,36 @@ namespace Satellite_Analyzer
             //diffGroup = await QueuedTask.Run(() => { return LayerFactory.Instance.CreateGroupLayer(MapView.Active.Map, 0, "Differnce_Images"); });
 
             monitor = new("Search Progress", tiles.Count);
+        }
+
+        private static Mat MergeGrid3x3(Mat[] imgs)
+        {
+            int tileW = imgs[0].Width;
+            int tileH = imgs[0].Height;
+            Mat merged = new(tileH * 3, tileW * 3, imgs[0].Type());
+
+            for (int row = 0; row < 3; row++)
+            {
+                for (int col = 0; col < 3; col++)
+                {
+                    int idx = row * 3 + col;
+                    Rect roi = new(col * tileW, row * tileH, tileW, tileH);
+                    imgs[idx].CopyTo(merged[roi]);
+                }
+            }
+
+            // Crop a 1.25x region centered on the middle tile
+            int cropW = (int)(tileW * 1.25);
+            int cropH = (int)(tileH * 1.25);
+            int centerX = tileW + tileW / 2;
+            int centerY = tileH + tileH / 2;
+            Rect cropRoi = new(centerX - cropW / 2, centerY - cropH / 2, cropW, cropH);
+
+            Mat cropped = new(merged, cropRoi);
+            Mat result = new();
+            cropped.CopyTo(result);
+
+            return result;
         }
 
         public static async Task<List<SearchResult>> Search(Polygon polygon, int bMonth, int bYear, int aMonth, int aYear)
@@ -97,129 +128,196 @@ namespace Satellite_Analyzer
 
             monitor.Start();
 
-            var downloadBlock = new TransformBlock<(int, int), (int, int, byte[], byte[], int, Envelope, byte[], byte[], int)>(async (tile) =>
+            var downloadBlock = new TransformBlock<(int, int), (int, int, Mat[], Mat[], Envelope, Mat[], Mat[])>(async (tile) =>
             {
                 try
                 {
-                    if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, 0, null, null, null, 0);
+                    if (monitor.cancelled) return (tile.Item1, tile.Item2, null, null, null, null, null);
 
-                    var watch = System.Diagnostics.Stopwatch.StartNew();
-                    var (x, y) = tile;
+                    Mat[] beforeImgs = new Mat[9];
+                    Mat[] beforeUDMImgs = new Mat[9];
+                    Mat[] afterImgs = new Mat[9];
+                    Mat[] afterUDMImgs = new Mat[9];
 
-                    string imgName = $"_{x}_{y}.png";
-                    string beforePath = savePath + "\\before" + imgName;
-                    string afterPath = savePath + "\\after" + imgName;
+                    Envelope envelope = null;
 
-                    var (beforeBytes, beforeUDMBytes, envelope, beforeMaskType) = await planetReader.FindImage(x, y, bMonth, bYear, beforePath);
-                    if (beforeBytes == null) return (x, y, null, null, 0, null, null, null, 0);
+                    var (sx, sy) = tile;
 
-                    var (afterBytes, afterUDMBytes, _, afterMaskType) = await planetReader.FindImage(x, y, aMonth, aYear, afterPath);
-                    if (afterBytes == null) return (x, y, null, null, 0, null, null, null, 0);
+                    int idx = 0;
 
-                    watch.Stop();
-                    Console.WriteLine($"Tile {x}, {y} downloaded in {watch.ElapsedMilliseconds} ms");
+                    for (int y = sy + 1; y >= sy - 1; y--)
+                    {
+                        for (int x = sx - 1; x <= sx + 1; x++)
+                        {
+                            var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                    return (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType);
+                            var (beforeImg, beforeCCImg, envel) = await planetReader.FindImage(x, y, bMonth, bYear, savePath + "/before");
+                            if (beforeImg == null) return (x, y, null, null, null, null, null);
+
+                            var (afterImg, afterUDMImg, _) = await planetReader.FindImage(x, y, aMonth, aYear, savePath + "/after");
+                            if (afterImg == null) return (x, y, null, null, null, null, null);
+
+                            watch.Stop();
+                            Console.WriteLine($"Tile {x}, {y} downloaded in {watch.ElapsedMilliseconds} ms");
+
+                            if (idx == 4) envelope = envel;
+
+                            beforeImgs[idx] = beforeImg;
+                            beforeUDMImgs[idx] = beforeCCImg;
+                            afterImgs[idx] = afterImg;
+                            afterUDMImgs[idx] = afterUDMImg;
+                            idx++;
+                        }
+                    }
+
+                    return (sx, sy, beforeImgs, beforeUDMImgs, envelope, afterImgs, afterUDMImgs);
                 }
                 catch (Exception ex)
                 {
                     System.Windows.MessageBox.Show("Error in Download Block:\n\n" + ex.Message);
                 }
 
-                return (tile.Item1, tile.Item2, null, null, 0, null, null, null, 0);
+                return (tile.Item1, tile.Item2, null, null, null, null, null);
             },
             new ExecutionDataflowBlockOptions
             {
-                BoundedCapacity = 4,
+                MaxDegreeOfParallelism = 1,
+                BoundedCapacity = 1,
                 EnsureOrdered = false
             });
 
-            var preprocessBlock = new TransformBlock<(int, int, byte[], byte[], int, Envelope, byte[], byte[], int), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[])>((packet) =>
+
+            var preprocessBlock = new TransformBlock<(int, int, Mat[], Mat[], Envelope, Mat[], Mat[]), (int, int, Mat, Mat, Envelope, Mat, Mat)>((packet) =>
             {
                 try
                 {
                     var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                    var (x, y, beforeBytes, beforeUDMBytes, beforeMaskType, envelope, afterBytes, afterUDMBytes, afterMaskType) = packet;
+                    var (x, y, beforeImgs, beforeUDMImgs, envelope, afterImgs, afterUDMImgs) = packet;
 
-                    if (monitor.cancelled || beforeBytes == null || afterBytes == null) return (x, y, null, null, null, null, null, null, null);
+                    if (monitor.cancelled || beforeImgs == null) return (x, y, null, null, null, null, null);
 
-                    Mat beforeImg = Cv2.ImDecode(beforeBytes, ImreadModes.Color);
-                    Mat beforeCCImg = PlanetReader.DecodeUDM(beforeUDMBytes, beforeMaskType);
-                    Mat afterImg = Cv2.ImDecode(afterBytes, ImreadModes.Color);
-                    Mat afterCCImg = PlanetReader.DecodeUDM(afterUDMBytes, afterMaskType);
+                    Mat beforeImg = MergeGrid3x3(beforeImgs);
+                    Mat beforeCCImg = MergeGrid3x3(beforeUDMImgs);
+                    Mat afterImg = MergeGrid3x3(afterImgs);
+                    Mat afterCCImg = MergeGrid3x3(afterUDMImgs);
 
                     Cv2.MedianBlur(beforeImg, beforeImg, 5);
                     Cv2.MedianBlur(afterImg, afterImg, 5);
 
+                    //extend envelope by 1.25x to match the merged image
+                    double xCenter = (envelope.XMin + envelope.XMax) / 2;
+                    double yCenter = (envelope.YMin + envelope.YMax) / 2;
+                    double xHalfWidth = (envelope.XMax - envelope.XMin) / 2 * 1.25;
+                    double yHalfHeight = (envelope.YMax - envelope.YMin) / 2 * 1.25;
+                    Envelope mergedEnvelope = EnvelopeBuilderEx.CreateEnvelope(xCenter - xHalfWidth, yCenter - yHalfHeight, xCenter + xHalfWidth, yCenter + yHalfHeight, envelope.SpatialReference);
+
                     watch.Stop();
                     Console.WriteLine($"Tile {x}, {y} preprocessed in {watch.ElapsedMilliseconds} ms");
 
-                    return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes);
+                    return (x, y, beforeImg, beforeCCImg, envelope, afterImg, afterCCImg);
                 }
                 catch (Exception ex)
                 {
                     System.Windows.MessageBox.Show("Error in Pre Processing Block:\n\n" + ex.Message);
                 }
 
-                return (packet.Item1, packet.Item2, null, null, null, null, null, null, null);
+                return (packet.Item1, packet.Item2, null, null, null, null, null);
             },
             new ExecutionDataflowBlockOptions
             {
-                BoundedCapacity = 4,
+                MaxDegreeOfParallelism = 1,
+                BoundedCapacity = 1,
                 EnsureOrdered = false
             });
 
-            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[]), (int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector, ByteVector)>((packet) =>
+            var predictionBlock = new TransformBlock<(int, int, Mat, Mat, Envelope, Mat, Mat), (int, int, Mat, Mat, Envelope, Mat, Mat, ByteVector, ByteVector)>((packet) =>
             {
                 try
                 {
                     var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                    var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes) = packet;
+                    var (x, y, beforeImg, beforeCCImg, envelope, afterImg, afterCCImg) = packet;
 
-                    if (monitor.cancelled || beforeImg == null || afterImg == null) return (x, y, null, null, null, null, null, null, null, null, null);
+                    if (monitor.cancelled || beforeImg == null || afterImg == null) return (x, y, null, null, null, null, null, null, null);
 
                     ByteVector tornadoPredictionA = tpp.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
-                    ByteVector tornadoPredictionB = tpp64.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
+                    ByteVector tornadoPredictionB = tpp64_256.analyze(beforeImg, afterImg, beforeImg.Width, beforeImg.Height);
 
                     watch.Stop();
                     Console.WriteLine($"Tile {x}, {y} predicted in {watch.ElapsedMilliseconds} ms");
 
-                    return (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPredictionA, tornadoPredictionB);
+                    return (x, y, beforeImg, beforeCCImg, envelope, afterImg, afterCCImg, tornadoPredictionA, tornadoPredictionB);
                 }
                 catch (Exception ex)
                 {
                     System.Windows.MessageBox.Show("Error in Prediction Block:\n\n" + ex.Message);
                 }
 
-                return (packet.Item1, packet.Item2, null, null, null, null, null, null, null, null, null);
+                return (packet.Item1, packet.Item2, null, null, null, null, null, null, null);
             }, 
             new ExecutionDataflowBlockOptions
             {
+                MaxDegreeOfParallelism = 1,
                 BoundedCapacity = 1,
                 EnsureOrdered = false
             });
 
-            var postProcessBlock = new TransformBlock<(int, int, Mat, Mat, byte[], Envelope, Mat, Mat, byte[], ByteVector, ByteVector), (int, int, int, int, Mat, Mat, Mat, Mat, byte[])> (async (packet) =>
+            var postProcessBlock = new TransformBlock<(int, int, Mat, Mat, Envelope, Mat, Mat, ByteVector, ByteVector), (int, int, int, int, Mat, Mat, Mat, Mat)> (async (packet) =>
             {
                 try 
                 { 
-                    if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, 0, null, null, null, null, null);
+                    if (monitor.cancelled) return (packet.Item1, packet.Item2, 0, 0, null, null, null, null);
                     var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                    var (x, y, beforeImg, beforeCCImg, beforeBytes, envelope, afterImg, afterCCImg, afterBytes, tornadoPredictionA, tornadoPredictionB) = packet;
+                    var (x, y, beforeImg, beforeCCImg, envelope, afterImg, afterCCImg, tornadoPredictionA, tornadoPredictionB) = packet;
 
-                    if (beforeImg == null || afterImg == null) return (x, y, 0, 0, null, null, null, null, null);
+                    if (beforeImg == null || afterImg == null) return (x, y, 0, 0, null, null, null, null);
+
+                    Cv2.ImWrite("C:/Users/danie/Documents/Experiments/Satellite/patch_predictor/testing_events/Lac des Deux Cantons/before.png", beforeImg);
+                    Cv2.ImWrite("C:/Users/danie/Documents/Experiments/Satellite/patch_predictor/testing_events/Lac des Deux Cantons/after.png", afterImg);
 
                     Mat predAImg = ByteVector.ToMat(tornadoPredictionA, beforeImg.Size());
+                    Cv2.ImWrite("C:/Users/danie/Documents/Experiments/Satellite/patch_predictor/testing_events/Lac des Deux Cantons/predA_" + x + "_" + y + ".png", predAImg);
+                    //Mat predASmall = new();
+                    //Cv2.Resize(predAImg, predASmall, new OpenCvSharp.Size(beforeImg.Width / 4, beforeImg.Height / 4), interpolation: InterpolationFlags.Area);
+
+                    //Cv2.ImShow("PredA", predASmall);
+                    //Cv2.WaitKey(0);
+                    //Cv2.DestroyAllWindows();
+
                     Mat predBImg = ByteVector.ToMat(tornadoPredictionB, beforeImg.Size());
+                    Cv2.ImWrite("C:/Users/danie/Documents/Experiments/Satellite/patch_predictor/testing_events/Lac des Deux Cantons/predB_" + x + "_" + y + ".png", predBImg);
+                    //Mat predBSmall = new();
+                    //Cv2.Resize(predBImg, predBSmall, new OpenCvSharp.Size(beforeImg.Width / 4, beforeImg.Height / 4), interpolation: InterpolationFlags.Area);
+
+                    //Cv2.ImShow("PredB", predBSmall);
+                    //Cv2.WaitKey(0);
+                    //Cv2.DestroyAllWindows();
 
                     Mat predImg = FloatMulNormalized(predAImg, predBImg);
+                    //Mat predSmall = new();
+                    //Cv2.Resize(predImg, predSmall, new OpenCvSharp.Size(beforeImg.Width / 4, beforeImg.Height / 4), interpolation: InterpolationFlags.Area);
+
+                    //Cv2.ImShow("Pred", predSmall);
+                    //Cv2.WaitKey(0);
+                    //Cv2.DestroyAllWindows();
 
                     Mat landcoverImg = await LandCoverMask(envelope, beforeImg.Size());
+                    //Mat landcoverSmall = new();
+                    //Cv2.Resize(landcoverImg, landcoverSmall, new OpenCvSharp.Size(beforeImg.Width / 4, beforeImg.Height / 4), interpolation: InterpolationFlags.Area);
+
+                    //Cv2.ImShow("Landcover Mask", landcoverSmall);
+                    //Cv2.WaitKey(0);
+                    //Cv2.DestroyAllWindows();
 
                     Mat colorChangeMask = ColorChangeMask(beforeImg, afterImg);
+                    Mat colorChangeSmall = new();
+                    //Cv2.Resize(colorChangeMask, colorChangeSmall, new OpenCvSharp.Size(beforeImg.Width / 4, beforeImg.Height / 4), interpolation: InterpolationFlags.Area);
+
+                    //Cv2.ImShow("Color Change Mask", colorChangeSmall);
+                    //Cv2.WaitKey(0);
+                    //Cv2.DestroyAllWindows();
 
                     Mat mask = new();
                     Cv2.BitwiseAnd(colorChangeMask, landcoverImg, mask);
@@ -228,10 +326,26 @@ namespace Satellite_Analyzer
 
                     Mat diffImg = AbsDifferenceImage(beforeImg, afterImg);
                     Cv2.BitwiseAnd(mask, diffImg, diffImg);
+                    Cv2.ImWrite("C:/Users/danie/Documents/Experiments/Satellite/patch_predictor/testing_events/Lac des Deux Cantons/diff_" + x + "_" + y + ".png", diffImg);
+
+                    //Mat diffSmall = new();
+                    //Cv2.Resize(diffImg, diffSmall, new OpenCvSharp.Size(beforeImg.Width / 4, beforeImg.Height / 4), interpolation: InterpolationFlags.Area);
+
+                    //Cv2.ImShow("Difference Image", diffSmall);
+                    //Cv2.WaitKey(0);
+                    //Cv2.DestroyAllWindows();
 
                     Cv2.CvtColor(mask, mask, ColorConversionCodes.BGR2GRAY);
 
                     Cv2.BitwiseAnd(predImg, mask, predImg);
+                    Cv2.ImWrite("C:/Users/danie/Documents/Experiments/Satellite/patch_predictor/testing_events/Lac des Deux Cantons/pred_masked_" + x + "_" + y + ".png", predImg);
+                    //Mat predSmallMasked = new();
+                    //Cv2.Resize(predImg, predSmallMasked, new OpenCvSharp.Size(beforeImg.Width / 4, beforeImg.Height / 4), interpolation: InterpolationFlags.Area);
+
+                    //Cv2.ImShow("Masked Prediction", predSmallMasked);
+                    //Cv2.WaitKey(0);
+                    //Cv2.DestroyAllWindows();
+
                     //Cv2.MorphologyEx(predImg, predImg, MorphTypes.Open, Cv2.GetStructuringElement(MorphShapes.Rect, new OpenCvSharp.Size(15, 15)));
                     Cv2.MinMaxLoc(predImg, out double _, out double maxVal);
 
@@ -242,31 +356,30 @@ namespace Satellite_Analyzer
                     watch.Stop();
                     Console.WriteLine($"Tile {x}, {y} post processed in {watch.ElapsedMilliseconds} ms");
 
-                    return (x, y, (int)maxVal, pxCount, predImg, diffImg, beforeImg, afterImg, afterBytes);
+                    return (x, y, (int)maxVal, pxCount, predImg, diffImg, beforeImg, afterImg);
                 }
                 catch (Exception ex) {
                     System.Windows.MessageBox.Show( "Error in Post Processing Block:\n\n" + ex.Message );
                 }
 
-                return (packet.Item1, packet.Item2, 0, 0, null, null, null, null, null);
+                return (packet.Item1, packet.Item2, 0, 0, null, null, null, null);
             },
             new ExecutionDataflowBlockOptions
             {
-                BoundedCapacity = 4,
+                MaxDegreeOfParallelism = 1,
+                BoundedCapacity = 1,
                 EnsureOrdered = false
             });
 
-            var saveBlock = new ActionBlock<(int, int, int, int, Mat, Mat, Mat, Mat, byte[])>(async (packet) =>
+            var saveBlock = new ActionBlock<(int, int, int, int, Mat, Mat, Mat, Mat)>(async (packet) =>
             {
                 try
                 {
                     if (monitor.cancelled) return;
 
-                    var (x, y, maxVal, pxCount, predImg, diffImg, beforeImg, afterImg, afterBytes) = packet;
+                    var (x, y, maxVal, pxCount, predImg, diffImg, beforeImg, afterImg) = packet;
 
-                    string imgName = $"_{x}_{y}.png";
-
-                    if (maxVal < 128)
+                    if (maxVal < 200)
                     {
                         Console.WriteLine($"Tile {x}, {y} skipped");
                         monitor.Update();
@@ -275,12 +388,17 @@ namespace Satellite_Analyzer
 
                     var watch = System.Diagnostics.Stopwatch.StartNew();
 
-                    Cv2.ImWrite(savePath + "\\before" + imgName, beforeImg);
-                    Cv2.ImWrite(savePath + "\\after" + imgName, afterImg);
-                    Cv2.ImWrite(savePath + "\\diff" + imgName, diffImg);
+                    Cv2.ImWrite(savePath + $"/diff_{x}_{y}.png", diffImg);
+                    Cv2.ImWrite(savePath + $"/before_{x}_{y}.png", beforeImg);
+                    Cv2.ImWrite(savePath + $"/after_{x}_{y}.png", afterImg);
+                    byte[] afterBytes = File.ReadAllBytes(savePath + $"/after_{aYear}_{aMonth}_{x}_{y}.bin");
 
                     Tiff pred = GeoTiff.CreateFromReference(afterBytes, savePath + $"\\pred_{x}_{y}.tif");
-                    GeoTiff.WriteImage(pred, predImg);
+                    Mat predRoi = new(predImg, new Rect(512, 512, 4096, 4096));
+                    Mat predCropped = new();
+                    predRoi.CopyTo(predCropped);
+
+                    GeoTiff.WriteImage(pred, predCropped);
 
                     significantTiles.Add(new(x, y, maxVal, pxCount));
 
@@ -307,7 +425,8 @@ namespace Satellite_Analyzer
             },
             new ExecutionDataflowBlockOptions
             {
-                BoundedCapacity = 4,
+                MaxDegreeOfParallelism = 1,
+                BoundedCapacity = 1,
                 EnsureOrdered = false
             });
 

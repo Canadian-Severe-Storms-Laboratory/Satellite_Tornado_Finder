@@ -68,7 +68,7 @@ namespace Satellite_Analyzer
 
             loadingLabel.Visibility = Visibility.Hidden;
 
-            TornadoPatchPredictor tpp = new(AddinAssemblyLocation() + "\\model64.onnx");
+            TornadoPatchPredictor64_256 tpp = new(AddinAssemblyLocation() + "\\model64_256.onnx");
 
             if (tpp.usingGPU)
             {
@@ -312,6 +312,7 @@ namespace Satellite_Analyzer
         {
             string imgName = $"_{result.tileX}_{result.tileY}";
             Mat pred = Cv2.ImRead(savePath + "\\pred" + imgName + ".tif", ImreadModes.Grayscale);
+            Cv2.CopyMakeBorder(pred, pred, 512, 512, 512, 512, BorderTypes.Constant, new Scalar(0));
             Cv2.Dilate(pred, pred, Cv2.GetStructuringElement(MorphShapes.Ellipse, new OpenCvSharp.Size(5, 5)));
 
             List<Coordinates[]> polys = [];
@@ -341,6 +342,7 @@ namespace Satellite_Analyzer
             Mat after = Cv2.ImRead(savePath + "\\after" + imgName + ".png");
             Mat diff = Cv2.ImRead(savePath + "\\diff" + imgName + ".png");
             Mat pred = Cv2.ImRead(savePath + "\\pred" + imgName + ".tif");
+            Cv2.CopyMakeBorder(pred, pred, 512, 512, 512, 512, BorderTypes.Constant, new Scalar(0));
 
             List <ImageRect> imageRects = [
                 MatToImageRect(before),

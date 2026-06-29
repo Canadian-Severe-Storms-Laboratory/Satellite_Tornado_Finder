@@ -60,10 +60,24 @@ namespace Satellite_Analyzer
             return (img, ccMask, TileIndexToEnvelope(x, y), ((fx - x)*img.Width, img.Height - (y - fy)*img.Height));
         }
 
-        public async Task<(byte[], byte[], Envelope, int)> FindImage(int x, int y, int month, int year, string savePath=null)
+        public async Task<(Mat, Mat, Envelope)> FindImage(int x, int y, int month, int year, string savePath=null)
         {
+            Mat img;
+            Mat ccMask;
+            byte[] imgBytes;
+
             try
             {
+                if (savePath != null && File.Exists(savePath + $"_{year}_{month}_{x}_{y}.bin"))
+                {
+                    imgBytes = File.ReadAllBytes(savePath + $"_{year}_{month}_{x}_{y}.bin");
+
+                    img = Cv2.ImDecode(imgBytes, ImreadModes.Color);
+                    ccMask = Cv2.ImRead(savePath + $"_{year}_{month}_{x}_{y}_mask.png", ImreadModes.Color);
+
+                    return (img, ccMask, TileIndexToEnvelope(x, y));
+                }
+
                 string url = String.Format(BASEMAP_URL, baseMapDict[(month, year)], x, y);
 
                 var imgTask = FetchImageTile(url);
@@ -71,14 +85,24 @@ namespace Satellite_Analyzer
 
                 await Task.WhenAll(imgTask, maskTask);
 
-                byte[] imgBytes = imgTask.Result;
+                imgBytes = imgTask.Result;
                 var (maskBytes, maskType) = maskTask.Result;
 
-                return (imgBytes, maskBytes, TileIndexToEnvelope(x, y), maskType);
+                img = Cv2.ImDecode(imgBytes, ImreadModes.Color);
+                ccMask = DecodeUDM(maskBytes, maskType);
+
+                if (savePath != null)
+                {
+                    //Cv2.ImWrite(savePath + $"_{year}_{month}_{x}_{y}.png", img);
+                    Cv2.ImWrite(savePath + $"_{year}_{month}_{x}_{y}_mask.png", ccMask);
+                    File.WriteAllBytes(savePath + $"_{year}_{month}_{x}_{y}.bin", imgBytes);
+                }
+
+                return (img, ccMask, TileIndexToEnvelope(x, y));
             }
             catch (Exception)
             {
-                return (null, null, null, 0);
+                return (null, null, null);
             }
         }
 
